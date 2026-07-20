@@ -38,6 +38,31 @@ export const DEFAULT_DOCTRINE_IDS = [
 
 export type DoctrineId = (typeof ALL_DOCTRINE_IDS)[number];
 
+// Cap how many agent calls run concurrently within a phase. Firing a full 9-agent roster
+// via Promise.all can burst past a low-tier OpenAI TPM cap even though each individual
+// call is well within per-request limits — throttling spreads the burst out, and
+// callOpenAITool's own 429 backoff handles whatever still slips through.
+const AGENT_CALL_CONCURRENCY = 3;
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const i = nextIndex++;
+      results[i] = await fn(items[i]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 interface RunOptions {
   caseId: string;
   caseBrief: string;
@@ -54,7 +79,16 @@ async function callAgent(baseUrl: string, doctrineId: string, payload: unknown) 
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Agent ${doctrineId} route failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    let detail = body;
+    try {
+      detail = JSON.parse(body).error ?? body;
+    } catch {
+      // body wasn't JSON — fall back to the raw text
+    }
+    throw new Error(`Agent ${doctrineId} route failed: ${res.status} ${detail}`);
+  }
   return res.json() as Promise<AgentRecord>;
 }
 
@@ -83,17 +117,15 @@ export async function runDeliberation(opts: RunOptions) {
   const phase2Rounds = Math.min(opts.phase2Rounds ?? 2, 3);
 
   // Phase 1 — independent reasoning, fully isolated, no agent sees another's output.
-  const phase1Results: AgentRecord[] = await Promise.all(
-    roster.map((id) =>
-      callAgent(opts.baseUrl, id, {
-        caseId: opts.caseId,
-        phase: 1,
-        caseBrief: opts.caseBrief,
-      }).then(async (r) => {
-        await logRun(opts.caseId, 1, r);
-        return r;
-      })
-    )
+  const phase1Results: AgentRecord[] = await mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) =>
+    callAgent(opts.baseUrl, id, {
+      caseId: opts.caseId,
+      phase: 1,
+      caseBrief: opts.caseBrief,
+    }).then(async (r) => {
+      await logRun(opts.caseId, 1, r);
+      return r;
+    })
   );
 
   // Phase 2 — bounded cross-examination rounds. Each round, every agent sees the
@@ -101,22 +133,20 @@ export async function runDeliberation(opts: RunOptions) {
   // fresh isolated call each time — no shared memory between calls.
   let currentPositions = phase1Results;
   for (let round = 0; round < phase2Rounds; round++) {
-    currentPositions = await Promise.all(
-      roster.map((id) => {
-        const priorPositions = currentPositions
-          .filter((p) => p.doctrineId !== id)
-          .map((p) => ({ doctrineId: p.doctrineId, verdict: p.verdict, reasoning: p.reasoning }));
-        return callAgent(opts.baseUrl, id, {
-          caseId: opts.caseId,
-          phase: 2,
-          caseBrief: opts.caseBrief,
-          priorPositions,
-        }).then(async (r) => {
-          await logRun(opts.caseId, 2, r);
-          return r;
-        });
-      })
-    );
+    currentPositions = await mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) => {
+      const priorPositions = currentPositions
+        .filter((p) => p.doctrineId !== id)
+        .map((p) => ({ doctrineId: p.doctrineId, verdict: p.verdict, reasoning: p.reasoning }));
+      return callAgent(opts.baseUrl, id, {
+        caseId: opts.caseId,
+        phase: 2,
+        caseBrief: opts.caseBrief,
+        priorPositions,
+      }).then(async (r) => {
+        await logRun(opts.caseId, 2, r);
+        return r;
+      });
+    });
   }
 
   // Phase 3 — a SIXTH, separate aggregator (not one of the 9) synthesizes a joint
@@ -206,25 +236,23 @@ export async function runPublicDeliberation(opts: PublicRunOptions) {
   // Any agent not yet cached for this case runs Phase 1 live now, then gets cached —
   // this is what lets a brand-new user-submitted case work with no pre-seeding step,
   // while still making every subsequent request for the same case/agent free.
-  const freshResults: AgentRecord[] = await Promise.all(
-    missingIds.map((id) =>
-      callAgent(opts.baseUrl, id, { caseId: opts.caseId, phase: 1, caseBrief: opts.caseBrief }).then(
-        async (r) => {
-          await supabase.from("phase1_cache").upsert({
-            case_id: opts.caseId,
-            doctrine_id: r.doctrineId,
-            framing: (r as any).framing,
-            doctrinal_analysis: (r as any).doctrinalAnalysis,
-            forecast_objective: (r as any).forecast?.objective,
-            forecast_projected_outcome: (r as any).forecast?.projectedOutcome,
-            forecast_confidence: (r as any).forecast?.confidence,
-            verdict: r.verdict,
-            reasoning: r.reasoning,
-          });
-          await logRun(opts.caseId, 1, r, true);
-          return r;
-        }
-      )
+  const freshResults: AgentRecord[] = await mapWithConcurrency(missingIds, AGENT_CALL_CONCURRENCY, (id) =>
+    callAgent(opts.baseUrl, id, { caseId: opts.caseId, phase: 1, caseBrief: opts.caseBrief }).then(
+      async (r) => {
+        await supabase.from("phase1_cache").upsert({
+          case_id: opts.caseId,
+          doctrine_id: r.doctrineId,
+          framing: (r as any).framing,
+          doctrinal_analysis: (r as any).doctrinalAnalysis,
+          forecast_objective: (r as any).forecast?.objective,
+          forecast_projected_outcome: (r as any).forecast?.projectedOutcome,
+          forecast_confidence: (r as any).forecast?.confidence,
+          verdict: r.verdict,
+          reasoning: r.reasoning,
+        });
+        await logRun(opts.caseId, 1, r, true);
+        return r;
+      }
     )
   );
 
@@ -245,22 +273,20 @@ export async function runPublicDeliberation(opts: PublicRunOptions) {
   const phase1Results: AgentRecord[] = [...cachedResults, ...freshResults];
 
   // Phase 2 — exactly one live round for the public sandbox (cost control).
-  const currentPositions: AgentRecord[] = await Promise.all(
-    roster.map((id) => {
-      const priorPositions = phase1Results
-        .filter((p) => p.doctrineId !== id)
-        .map((p) => ({ doctrineId: p.doctrineId, verdict: p.verdict, reasoning: p.reasoning }));
-      return callAgent(opts.baseUrl, id, {
-        caseId: opts.caseId,
-        phase: 2,
-        caseBrief: opts.caseBrief,
-        priorPositions,
-      }).then(async (r) => {
-        await logRun(opts.caseId, 2, r, true);
-        return r;
-      });
-    })
-  );
+  const currentPositions: AgentRecord[] = await mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) => {
+    const priorPositions = phase1Results
+      .filter((p) => p.doctrineId !== id)
+      .map((p) => ({ doctrineId: p.doctrineId, verdict: p.verdict, reasoning: p.reasoning }));
+    return callAgent(opts.baseUrl, id, {
+      caseId: opts.caseId,
+      phase: 2,
+      caseBrief: opts.caseBrief,
+      priorPositions,
+    }).then(async (r) => {
+      await logRun(opts.caseId, 2, r, true);
+      return r;
+    });
+  });
 
   // Phase 3 — live aggregation.
   const jointRuling = await aggregate(opts.caseId, currentPositions);

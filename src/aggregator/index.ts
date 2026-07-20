@@ -3,6 +3,8 @@
 // explicit majority position and attributed dissents. It never receives raw case facts
 // directly; it only ever sees other agents' verdicts and reasoning.
 
+import { callOpenAITool } from "@/src/lib/openaiClient";
+
 export interface AgentRecord {
   doctrineId: string;
   framing?: string;
@@ -128,46 +130,22 @@ export async function aggregate(
     )
     .join("\n\n")}`;
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      max_completion_tokens: 3000,
-      messages: [
-        { role: "system", content: AGGREGATOR_SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      tools: [SUBMIT_RULING_TOOL],
-      tool_choice: { type: "function", function: { name: "submit_ruling" } },
-    }),
+  const out = await callOpenAITool({
+    apiKey,
+    model: "gpt-4o",
+    maxCompletionTokens: 3000,
+    messages: [
+      { role: "system", content: AGGREGATOR_SYSTEM_PROMPT },
+      { role: "user", content: userContent },
+    ],
+    tool: SUBMIT_RULING_TOOL,
+    callerLabel: "Aggregator",
   });
 
-  if (!response.ok) {
-    throw new Error(`Aggregator call failed: ${response.status} ${await response.text()}`);
-  }
-
-  const data = await response.json();
-  return parseAggregatorOutput(data);
+  return parseAggregatorOutput(out);
 }
 
-function parseAggregatorOutput(data: any): JointRuling {
-  const toolCall = data.choices?.[0]?.message?.tool_calls?.find(
-    (t: any) => t.function?.name === "submit_ruling"
-  );
-  if (!toolCall) {
-    throw new Error("Aggregator did not return a submit_ruling tool call");
-  }
-  let out: any = {};
-  try {
-    out = JSON.parse(toolCall.function.arguments);
-  } catch {
-    throw new Error("Aggregator returned malformed tool call arguments");
-  }
-
+function parseAggregatorOutput(out: any): JointRuling {
   return {
     method: "synthesis-with-dissent",
     majorityPosition: out.majorityPosition ?? "",

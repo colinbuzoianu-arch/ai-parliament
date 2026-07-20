@@ -1,5 +1,6 @@
 // AUTO-GENERATED scaffold for the "Baruch Spinoza" agent.
 import { systemPrompt, doctrineMeta } from "./config";
+import { callOpenAITool } from "@/src/lib/openaiClient";
 
 export interface Forecast {
   objective: string;
@@ -82,30 +83,19 @@ export async function deliberate(input: DeliberationInput): Promise<Deliberation
 
   const userContent = buildUserContent(input);
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      max_completion_tokens: 2500,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-      tools: [SUBMIT_DELIBERATION_TOOL],
-      tool_choice: { type: "function", function: { name: "submit_deliberation" } },
-    }),
+  const out = await callOpenAITool({
+    apiKey,
+    model: "gpt-4o",
+    maxCompletionTokens: 2500,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContent },
+    ],
+    tool: SUBMIT_DELIBERATION_TOOL,
+    callerLabel: `Agent "spinoza"`,
   });
 
-  if (!response.ok) {
-    throw new Error(`Agent "spinoza" API call failed: ${response.status} ${await response.text()}`);
-  }
-
-  const data = await response.json();
-  return parseModelOutput(data);
+  return parseModelOutput(out);
 }
 
 function buildUserContent(input: DeliberationInput): string {
@@ -119,19 +109,7 @@ function buildUserContent(input: DeliberationInput): string {
   return content;
 }
 
-function parseModelOutput(data: any): DeliberationOutput {
-  const toolCall = data.choices?.[0]?.message?.tool_calls?.find(
-    (t: any) => t.function?.name === "submit_deliberation"
-  );
-  if (!toolCall) {
-    throw new Error(`Agent "spinoza" did not return a submit_deliberation tool call`);
-  }
-  let out: any = {};
-  try {
-    out = JSON.parse(toolCall.function.arguments);
-  } catch {
-    throw new Error(`Agent "spinoza" returned malformed tool call arguments`);
-  }
+function parseModelOutput(out: any): DeliberationOutput {
   const forecast: Forecast = {
     objective: out.forecast?.objective ?? "",
     projectedOutcome: out.forecast?.projectedOutcome ?? "",
