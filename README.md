@@ -53,7 +53,7 @@ away before storage.
    `deliberate()` function, its own API key env var. No agent module imports another.
 2. **One HTTP route per agent.** `app/api/agents/<id>/route.ts` is the only network-reachable
    entry point into that agent. The orchestrator calls this route, never the agent module
-   directly, and never calls `api.anthropic.com` itself.
+   directly, and never calls `api.openai.com` itself.
 3. **The orchestrator is a pure sequencer.** `src/orchestrator/index.ts` has no doctrine and no
    model call of its own — it only calls agent routes in the right order and logs results.
 4. **No persisted memory.** Every `deliberate()` call is a fresh HTTP request with no session,
@@ -93,7 +93,7 @@ this enforced even against your own service key, create a dedicated Postgres rol
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in Supabase + Anthropic keys, and APP_BASE_URL=http://localhost:3000
+cp .env.example .env.local   # fill in Supabase + OpenAI keys, and APP_BASE_URL=http://localhost:3000
 # run supabase/schema.sql against your Supabase project (SQL editor or CLI)
 npm run dev
 ```
@@ -122,7 +122,7 @@ For adversarial testing (prompt injection, authority-override, sycophancy pressu
 point this deployment at your real Supabase project or production API keys. Deploy a second
 instance (or a preview branch) with:
 - a separate Supabase project (so attack-test logs never mix with real audit data)
-- separate, spend-capped Anthropic API keys per agent
+- separate, spend-capped OpenAI API keys per agent
 - ideally a separate, non-indexed subdomain, gated behind basic auth
 
 This keeps the parliament's real audit trail clean while still exercising the exact same
@@ -137,7 +137,7 @@ from the internal admin page at `/`.
 since agents never see each other in Phase 1. So for public/seeded cases, Phase 1 is computed
 **once**, for all 11 agents, via `scripts/seed-cases.mjs`, and cached in `phase1_cache`. When a
 visitor picks a subset of agents on `/sandbox` and hits run, only Phase 2 (one live round) and
-Phase 3 (live aggregation) actually call the Anthropic API — a small, bounded number of calls
+Phase 3 (live aggregation) actually call the OpenAI API — a small, bounded number of calls
 per visitor session, not a full 11-agent Phase 1 every time.
 
 **Rate limiting:** `public_usage` now tracks two kinds separately — `rerun` (re-running an

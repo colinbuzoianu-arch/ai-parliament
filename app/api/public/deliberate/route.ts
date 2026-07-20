@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     .from("cases")
     .select("*")
     .eq("id", caseId)
-    .eq("is_public", true)
+    .eq("status", "approved")
     .single();
 
   if (error || !caseRow) return NextResponse.json({ error: "Public case not found" }, { status: 404 });

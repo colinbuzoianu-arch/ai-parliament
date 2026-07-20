@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { DisagreementMap } from "@/src/components/DisagreementMap";
 
 const ALL_AGENTS = [
   "spinoza", "weil", "solzhenitsyn", "ibnrushd", "gandhi",
@@ -25,6 +27,24 @@ interface PublicCase {
 
 const MAX_SUBMISSION_AGENTS = 6;
 
+// Swappable intro paragraph, selected via ?framing=<key> (e.g. /sandbox?framing=security).
+// The underlying interface (agents, phases, gallery, submission) never changes — only this text.
+const DEFAULT_FRAMING = "philosophy";
+const FRAMINGS: Record<string, string> = {
+  philosophy:
+    "Nine (or more) agents, each reasoning strictly from the doctrine of a thinker who wrote " +
+    "from poverty or renounced material gain for their work, deliberate on a policy case in " +
+    "three phases: independent reasoning, cross-examination, and a joint ruling with " +
+    "attributed dissent. Pick a case, choose which agents sit on the panel, and run a live " +
+    "deliberation.",
+  security:
+    "Nine (or more) reasoning agents, each locked to a distinct doctrinal stance with no shared " +
+    "memory between calls, independently evaluate a proposal, cross-examine each other's " +
+    "positions, then reach a jointly synthesized verdict with attributed dissent — a structured, " +
+    "auditable multi-agent review pattern. Pick a case, choose which agents sit on the panel, " +
+    "and run a live deliberation.",
+};
+
 export default function SandboxPage() {
   const [cases, setCases] = useState<PublicCase[]>([]);
   const [selectedCase, setSelectedCase] = useState<PublicCase | null>(null);
@@ -37,9 +57,12 @@ export default function SandboxPage() {
   const [newTitle, setNewTitle] = useState("");
   const [newBrief, setNewBrief] = useState("");
   const [newRoster, setNewRoster] = useState<Set<string>>(new Set(["spinoza", "weil", "gramsci"]));
+  const [framingKey, setFramingKey] = useState(DEFAULT_FRAMING);
 
   useEffect(() => {
     loadCases();
+    const requested = new URLSearchParams(window.location.search).get("framing");
+    if (requested && FRAMINGS[requested]) setFramingKey(requested);
   }, []);
 
   function loadCases() {
@@ -131,11 +154,7 @@ export default function SandboxPage() {
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 500 }}>AI Parliament — sandbox</h1>
       <p style={{ fontSize: 14, color: "#555", lineHeight: 1.6 }}>
-        Nine (or more) agents, each reasoning strictly from the doctrine of a thinker who wrote
-        from poverty or renounced material gain for their work, deliberate on a policy case in
-        three phases: independent reasoning, cross-examination, and a joint ruling with
-        attributed dissent. Pick a case, choose which agents sit on the panel, and run a live
-        deliberation.
+        {FRAMINGS[framingKey] ?? FRAMINGS[DEFAULT_FRAMING]}
       </p>
 
       {!selectedCase && (
@@ -158,28 +177,35 @@ export default function SandboxPage() {
       {!selectedCase && mode === "gallery" && (
         <div style={{ display: "grid", gap: 12 }}>
           {cases.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => pickCase(c)}
-              style={{
-                textAlign: "left",
-                padding: "1rem",
-                border: "1px solid #ddd",
-                borderRadius: 8,
-                background: "transparent",
-                cursor: "pointer",
-              }}
-            >
-              <p style={{ fontWeight: 500, margin: "0 0 4px" }}>
-                {c.title}
-                {c.source === "user_submitted" && (
-                  <span style={{ fontSize: 11, fontWeight: 400, color: "#4a7", marginLeft: 8 }}>
-                    submitted by a visitor
-                  </span>
-                )}
-              </p>
-              <p style={{ fontSize: 13, color: "#666", margin: 0 }}>{c.brief.slice(0, 140)}...</p>
-            </button>
+            <div key={c.id} style={{ padding: "1rem", border: "1px solid #ddd", borderRadius: 8 }}>
+              <button
+                onClick={() => pickCase(c)}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  padding: 0,
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                }}
+              >
+                <p style={{ fontWeight: 500, margin: "0 0 4px" }}>
+                  {c.title}
+                  {c.source === "user_submitted" && (
+                    <span style={{ fontSize: 11, fontWeight: 400, color: "#4a7", marginLeft: 8 }}>
+                      submitted by a visitor
+                    </span>
+                  )}
+                </p>
+                <p style={{ fontSize: 13, color: "#666", margin: 0 }}>{c.brief.slice(0, 140)}...</p>
+              </button>
+              <Link
+                href={`/sandbox/case/${c.id}`}
+                style={{ fontSize: 12, color: "#4a7", display: "inline-block", marginTop: 8 }}
+              >
+                View full case →
+              </Link>
+            </div>
           ))}
         </div>
       )}
@@ -316,6 +342,14 @@ export default function SandboxPage() {
                 <p style={{ fontSize: 12, color: "#666", margin: "0 0 4px" }}>Majority position</p>
                 <p style={{ fontSize: 14, margin: 0 }}>{result.phase3.majorityPosition}</p>
               </div>
+
+              <p style={{ fontSize: 12, color: "#666", margin: "1.5rem 0 6px" }}>Disagreement map</p>
+              <DisagreementMap
+                agentRuns={result.phase2Final}
+                jointRuling={result.phase3}
+                labels={LABELS}
+              />
+
               <p style={{ fontSize: 13, whiteSpace: "pre-wrap", marginTop: 10 }}>{result.phase3.synthesisNotes}</p>
             </div>
           )}

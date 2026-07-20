@@ -131,6 +131,9 @@ export async function runDeliberation(opts: RunOptions) {
     reasoning: jointRuling.synthesisNotes,
     verdict_changed_from_prior_phase: false,
     change_justification: null,
+    majority_support: jointRuling.majoritySupport,
+    dissents: jointRuling.dissents,
+    reasoning_tensions: jointRuling.reasoningTensions,
   });
   if (error) throw new Error(`Audit log insert failed (phase 3): ${error.message}`);
 
@@ -268,6 +271,9 @@ export async function runPublicDeliberation(opts: PublicRunOptions) {
     verdict: jointRuling.majorityPosition,
     reasoning: jointRuling.synthesisNotes,
     verdict_changed_from_prior_phase: false,
+    majority_support: jointRuling.majoritySupport,
+    dissents: jointRuling.dissents,
+    reasoning_tensions: jointRuling.reasoningTensions,
     is_public: true,
   });
 

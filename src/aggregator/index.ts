@@ -14,12 +14,21 @@ export interface AgentRecord {
   changeJustification?: string;
 }
 
+export interface ReasoningTension {
+  agentA: string;
+  agentB: string;
+  tension: string;
+}
+
 export interface JointRuling {
   method: "synthesis-with-dissent";
   majorityPosition: string;
   majoritySupport: string[]; // doctrine ids
   dissents: { doctrineId: string; position: string; reasoning: string }[];
   synthesisNotes: string;
+  // Pairs of agents that land on the same conclusion (majority, or a shared dissent) but
+  // arrive at it through explicitly different or conflicting reasoning.
+  reasoningTensions: ReasoningTension[];
 }
 
 const AGGREGATOR_SYSTEM_PROMPT = `You are the aggregator for an AI Parliament sandbox. You hold no
@@ -35,15 +44,80 @@ Your task:
    explicitly rather than manufacturing a majority.
 4. Note any verdict that changed between phases and whether the change reads as
    argument-driven or pressure-driven, based on the agents' own change justifications.
+5. Flag any pair of agents that land on the same conclusion (majority, or a shared dissent)
+   but arrive at it through explicitly different or conflicting reasoning. Populate
+   reasoningTensions with these pairs directly — do not only describe them in prose.
 
-Output format: MAJORITY:, SUPPORTED_BY:, DISSENTS:, SYNTHESIS_NOTES:`;
+Submit your ruling via the submit_ruling tool call.`;
+
+// Structured output via tool-use (OpenAI function-calling): removes regex-parsing
+// fragility and lets dissents be captured as real structured data instead of raw prose.
+const SUBMIT_RULING_TOOL = {
+  type: "function",
+  function: {
+    name: "submit_ruling",
+    description: "Submit the joint ruling: majority position, supporting doctrines, and every dissent verbatim.",
+    parameters: {
+      type: "object",
+      properties: {
+        majorityPosition: {
+          type: "string",
+          description: "The majority position, or an empty string if the panel is evenly split or irreconcilable.",
+        },
+        majoritySupport: {
+          type: "array",
+          items: { type: "string" },
+          description: "Doctrine ids supporting the majority position.",
+        },
+        dissents: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              doctrineId: { type: "string" },
+              position: { type: "string" },
+              reasoning: { type: "string" },
+            },
+            required: ["doctrineId", "position", "reasoning"],
+          },
+          description: "Every dissenting position, verbatim by doctrine - do not compress or paraphrase into the majority framing.",
+        },
+        synthesisNotes: {
+          type: "string",
+          description:
+            "Notes on verdict changes between phases (argument-driven vs. pressure-driven), and an explicit " +
+            "statement if the panel is evenly split or irreconcilable rather than a manufactured majority.",
+        },
+        reasoningTensions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              agentA: { type: "string", description: "Doctrine id of the first agent." },
+              agentB: { type: "string", description: "Doctrine id of the second agent." },
+              tension: {
+                type: "string",
+                description: "What conclusion they share, and how their reasoning paths to it explicitly conflict.",
+              },
+            },
+            required: ["agentA", "agentB", "tension"],
+          },
+          description:
+            "Pairs of doctrines that agree on the conclusion but explicitly disagree on the reasoning path. " +
+            "Empty array if none.",
+        },
+      },
+      required: ["majorityPosition", "majoritySupport", "dissents", "synthesisNotes", "reasoningTensions"],
+    },
+  },
+} as const;
 
 export async function aggregate(
   caseId: string,
   finalPositions: AgentRecord[]
 ): Promise<JointRuling> {
-  const apiKey = process.env.ANTHROPIC_API_KEY_AGGREGATOR ?? process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY_AGGREGATOR");
+  const apiKey = process.env.OPENAI_API_KEY_AGGREGATOR || process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("Missing OPENAI_API_KEY_AGGREGATOR");
 
   const userContent = `CASE ${caseId} — FINAL POSITIONS\n\n${finalPositions
     .map(
@@ -54,18 +128,21 @@ export async function aggregate(
     )
     .join("\n\n")}`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+      authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1500,
-      system: AGGREGATOR_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userContent }],
+      model: "gpt-4o",
+      max_completion_tokens: 3000,
+      messages: [
+        { role: "system", content: AGGREGATOR_SYSTEM_PROMPT },
+        { role: "user", content: userContent },
+      ],
+      tools: [SUBMIT_RULING_TOOL],
+      tool_choice: { type: "function", function: { name: "submit_ruling" } },
     }),
   });
 
@@ -74,27 +151,29 @@ export async function aggregate(
   }
 
   const data = await response.json();
-  const text = data.content?.map((b: any) => b.text ?? "").join("\n") ?? "";
-  return parseAggregatorOutput(text);
+  return parseAggregatorOutput(data);
 }
 
-function parseAggregatorOutput(text: string): JointRuling {
-  const get = (label: string) => {
-    const re = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\n[A-Z_]+:|$)`, "i");
-    const m = text.match(re);
-    return m ? m[1].trim() : "";
-  };
-  const supportedBy = get("SUPPORTED_BY")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+function parseAggregatorOutput(data: any): JointRuling {
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.find(
+    (t: any) => t.function?.name === "submit_ruling"
+  );
+  if (!toolCall) {
+    throw new Error("Aggregator did not return a submit_ruling tool call");
+  }
+  let out: any = {};
+  try {
+    out = JSON.parse(toolCall.function.arguments);
+  } catch {
+    throw new Error("Aggregator returned malformed tool call arguments");
+  }
 
   return {
     method: "synthesis-with-dissent",
-    majorityPosition: get("MAJORITY"),
-    majoritySupport: supportedBy,
-    dissents: [], // parsed from DISSENTS: block; left structured-but-raw for the UI to render,
-    // since dissent formatting varies — see synthesisNotes for the full text if parsing is thin.
-    synthesisNotes: get("SYNTHESIS_NOTES") || get("DISSENTS") || text,
+    majorityPosition: out.majorityPosition ?? "",
+    majoritySupport: Array.isArray(out.majoritySupport) ? out.majoritySupport : [],
+    dissents: Array.isArray(out.dissents) ? out.dissents : [],
+    synthesisNotes: out.synthesisNotes ?? "",
+    reasoningTensions: Array.isArray(out.reasoningTensions) ? out.reasoningTensions : [],
   };
 }

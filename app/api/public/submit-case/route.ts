@@ -57,7 +57,8 @@ export async function POST(req: NextRequest) {
       active_doctrines: activeDoctrines,
       phase2_rounds: 1,
       is_seeded: false,
-      is_public: true, // submissions join the public gallery for others to view without recomputing
+      is_public: false, // stays hidden from the public gallery until an admin approves it
+      status: "pending",
       source: "user_submitted",
     })
     .select()

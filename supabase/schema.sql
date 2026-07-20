@@ -22,6 +22,9 @@ create table if not exists cases (
   is_seeded boolean not null default false,   -- true for cases created via scripts/seed-cases.mjs
   is_public boolean not null default false,   -- true = shown in the public sandbox gallery
   source text not null default 'seeded',      -- 'seeded' | 'user_submitted'
+  -- Moderation gate: a submission runs its deliberation immediately, but only becomes visible
+  -- in the public gallery once an admin flips this to 'approved' via /api/admin/approve-case.
+  status text not null default 'pending',     -- 'pending' | 'approved' | 'rejected'
   created_at timestamptz not null default now()
 );
 
@@ -70,10 +73,29 @@ create table if not exists agent_runs (
   reasoning text not null,            -- flat concatenation, kept for quick display/back-compat
   verdict_changed_from_prior_phase boolean not null default false,
   change_justification text,
-  model text not null default 'claude-sonnet-4-6',
+  -- Phase 3 (_aggregator) only: structured joint-ruling output, so a permalink or later
+  -- retrieval can rebuild the disagreement map without re-running the aggregator.
+  majority_support text[],
+  dissents jsonb,
+  reasoning_tensions jsonb,
+  model text not null default 'gpt-4o',
   is_public boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+-- Migration for pre-existing agent_runs tables created before these columns existed.
+alter table agent_runs add column if not exists majority_support text[];
+alter table agent_runs add column if not exists dissents jsonb;
+alter table agent_runs add column if not exists reasoning_tensions jsonb;
+
+-- Migration for pre-existing cases tables created before the moderation gate existed.
+alter table cases add column if not exists status text not null default 'pending';
+-- Backfill: any case already marked public under the old is_public-only gate stays visible.
+update cases set status = 'approved' where is_public = true and status = 'pending';
+
+-- Migration: agents moved from Anthropic to OpenAI (gpt-4o) — only affects future inserts;
+-- rows already logged under Claude keep their historically-accurate model value.
+alter table agent_runs alter column model set default 'gpt-4o';
 
 -- Enforce append-only at the database level, not just in application code.
 -- Revoke UPDATE/DELETE from the roles the app uses; only INSERT and SELECT remain.

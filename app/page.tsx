@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DisagreementMap } from "@/src/components/DisagreementMap";
 
 const DEFAULT_ROSTER = [
   "spinoza",
@@ -42,7 +43,13 @@ interface AgentRun {
 interface RunResult {
   phase1: AgentRun[];
   phase2Final: AgentRun[];
-  phase3: { majorityPosition: string; majoritySupport: string[]; synthesisNotes: string };
+  phase3: {
+    majorityPosition: string;
+    majoritySupport: string[];
+    dissents: { doctrineId: string; position: string; reasoning: string }[];
+    reasoningTensions: { agentA: string; agentB: string; tension: string }[];
+    synthesisNotes: string;
+  };
 }
 
 export default function Page() {
@@ -239,7 +246,15 @@ export default function Page() {
                   </p>
                 )}
               </div>
-              <p style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>Full synthesis / dissents</p>
+
+              <p style={{ fontSize: 12, color: "#666", margin: "1.5rem 0 6px" }}>Disagreement map</p>
+              <DisagreementMap
+                agentRuns={result.phase2Final}
+                jointRuling={result.phase3}
+                labels={LABELS}
+              />
+
+              <p style={{ fontSize: 12, color: "#666", margin: "1.5rem 0 6px" }}>Full synthesis / dissents</p>
               <p style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{result.phase3.synthesisNotes}</p>
             </div>
           )}

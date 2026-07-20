@@ -26,24 +26,77 @@ export interface DeliberationOutput {
   changeJustification?: string;
 }
 
+// Structured output via tool-use (OpenAI function-calling): the model must call this
+// function instead of producing free text with labeled sections. Removes regex-parsing
+// fragility entirely.
+const SUBMIT_DELIBERATION_TOOL = {
+  type: "function",
+  function: {
+    name: "submit_deliberation",
+    description:
+      "Submit your four-stage deliberation for this case: framing, doctrinal analysis, forecast, and verdict.",
+    parameters: {
+      type: "object",
+      properties: {
+        framing: {
+          type: "string",
+          description: "What this doctrine is actually being asked to evaluate in this case.",
+        },
+        doctrinalAnalysis: {
+          type: "string",
+          description: "The doctrine applied to the specific facts of the case.",
+        },
+        forecast: {
+          type: "object",
+          description: "Written before the verdict and never revised after - the pre-commitment record.",
+          properties: {
+            objective: { type: "string", description: "The outcome standard the proposal is judged against." },
+            projectedOutcome: { type: "string", description: "What you expect to happen if the proposal proceeds." },
+            confidence: { type: "string", enum: ["low", "medium", "high"] },
+          },
+          required: ["objective", "projectedOutcome", "confidence"],
+        },
+        verdict: {
+          type: "string",
+          description: "Your actual position, which must follow from framing, doctrinal analysis, and forecast.",
+        },
+        changed: {
+          type: "boolean",
+          description: "True only in Phase 2+ if this verdict changed from your own prior-phase position.",
+        },
+        why: {
+          type: "string",
+          description:
+            "Required if changed is true: state explicitly whether the doctrine itself justifies the update, " +
+            "versus social pressure to converge. Label a pressure-driven change as such.",
+        },
+      },
+      required: ["framing", "doctrinalAnalysis", "forecast", "verdict", "changed"],
+    },
+  },
+} as const;
+
 export async function deliberate(input: DeliberationInput): Promise<DeliberationOutput> {
-  const apiKey = process.env[`ANTHROPIC_API_KEY_KROPOTKIN`] ?? process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error(`Missing API key for agent "kropotkin". Set ANTHROPIC_API_KEY_KROPOTKIN.`);
+  const apiKey = process.env[`OPENAI_API_KEY_KROPOTKIN`] || process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error(`Missing API key for agent "kropotkin". Set OPENAI_API_KEY_KROPOTKIN.`);
 
   const userContent = buildUserContent(input);
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+      authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userContent }],
+      model: "gpt-4o",
+      max_completion_tokens: 2500,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+      tools: [SUBMIT_DELIBERATION_TOOL],
+      tool_choice: { type: "function", function: { name: "submit_deliberation" } },
     }),
   });
 
@@ -52,8 +105,7 @@ export async function deliberate(input: DeliberationInput): Promise<Deliberation
   }
 
   const data = await response.json();
-  const text = data.content?.map((b: any) => b.text ?? "").join("\n") ?? "";
-  return parseModelOutput(text);
+  return parseModelOutput(data);
 }
 
 function buildUserContent(input: DeliberationInput): string {
@@ -64,35 +116,38 @@ function buildUserContent(input: DeliberationInput): string {
       content += `\n[${p.doctrineId}] Verdict: ${p.verdict}\nReasoning: ${p.reasoning}\n`;
     }
   }
-  content +=
-    "\n\nRespond with exactly these labeled sections: FRAMING:, DOCTRINAL_ANALYSIS:, " +
-    "OBJECTIVE:, PROJECTED_OUTCOME:, CONFIDENCE:, VERDICT:, CHANGED: yes|no, WHY: (only if CHANGED is yes).";
   return content;
 }
 
-function parseModelOutput(text: string): DeliberationOutput {
-  const get = (label: string) => {
-    const re = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\n[A-Z_]+:|$)`, "i");
-    const m = text.match(re);
-    return m ? m[1].trim() : "";
-  };
-  const framing = get("FRAMING");
-  const doctrinalAnalysis = get("DOCTRINAL_ANALYSIS");
+function parseModelOutput(data: any): DeliberationOutput {
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.find(
+    (t: any) => t.function?.name === "submit_deliberation"
+  );
+  if (!toolCall) {
+    throw new Error(`Agent "kropotkin" did not return a submit_deliberation tool call`);
+  }
+  let out: any = {};
+  try {
+    out = JSON.parse(toolCall.function.arguments);
+  } catch {
+    throw new Error(`Agent "kropotkin" returned malformed tool call arguments`);
+  }
   const forecast: Forecast = {
-    objective: get("OBJECTIVE"),
-    projectedOutcome: get("PROJECTED_OUTCOME"),
-    confidence: (get("CONFIDENCE") || "medium").toLowerCase(),
+    objective: out.forecast?.objective ?? "",
+    projectedOutcome: out.forecast?.projectedOutcome ?? "",
+    confidence: out.forecast?.confidence ?? "medium",
   };
-  const verdict = get("VERDICT") || text.slice(0, 280);
 
   return {
     doctrineId: doctrineMeta.id,
-    framing,
-    doctrinalAnalysis,
+    framing: out.framing ?? "",
+    doctrinalAnalysis: out.doctrinalAnalysis ?? "",
     forecast,
-    verdict,
-    reasoning: [framing, doctrinalAnalysis, `Forecast: ${forecast.projectedOutcome}`].filter(Boolean).join("\n\n"),
-    verdictChangedFromPriorPhase: /^yes/i.test(get("CHANGED")),
-    changeJustification: get("WHY") || undefined,
+    verdict: out.verdict ?? "",
+    reasoning: [out.framing, out.doctrinalAnalysis, `Forecast: ${forecast.projectedOutcome}`]
+      .filter(Boolean)
+      .join("\n\n"),
+    verdictChangedFromPriorPhase: !!out.changed,
+    changeJustification: out.why || undefined,
   };
 }
