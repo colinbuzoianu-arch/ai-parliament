@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AgentChip } from "@/src/components/AgentChip";
 import { CaseResultTabs } from "@/src/components/CaseResultTabs";
 import { SandboxExplainer } from "@/src/components/SandboxExplainer";
+import { WlsFooter } from "@/src/components/WlsFooter";
 import { ALL_AGENTS, LABELS } from "@/src/lib/palette";
 
 const DEFAULT_ROSTER = [
@@ -227,6 +228,8 @@ export default function SandboxPage() {
           )}
         </div>
       )}
+
+      <WlsFooter />
     </div>
   );
 }

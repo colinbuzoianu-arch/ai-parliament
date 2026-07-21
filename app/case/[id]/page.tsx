@@ -5,6 +5,7 @@
 import { notFound } from "next/navigation";
 import { supabase } from "@/src/lib/supabaseClient";
 import { CaseResultTabs } from "@/src/components/CaseResultTabs";
+import { WlsFooter } from "@/src/components/WlsFooter";
 
 interface AgentRunRow {
   phase: number;
@@ -70,6 +71,7 @@ export default async function CasePermalinkPage({ params }: { params: Promise<{ 
         <p style={{ fontSize: 14, color: "var(--ink-muted)" }}>
           This case hasn't been deliberated yet — no results to show.
         </p>
+        <WlsFooter />
       </div>
     );
   }
@@ -104,6 +106,8 @@ export default async function CasePermalinkPage({ params }: { params: Promise<{ 
           phase2Hint="Final recorded position after cross-examination."
         />
       </div>
+
+      <WlsFooter />
     </div>
   );
 }

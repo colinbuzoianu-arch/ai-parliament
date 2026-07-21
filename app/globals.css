@@ -1,5 +1,5 @@
-/* Design system for the public sandbox (/sandbox and /sandbox/case/[id]) only.
-   The admin page at / uses inline styles and does not reference these classes. */
+/* Design system for the public sandbox (/ and /case/[id]) only.
+   The internal admin page at /admin uses inline styles and does not reference these classes. */
 
 :root {
   --ink: #1a1a1a;
@@ -386,4 +386,21 @@
   color: #a33;
   margin-top: 1rem;
   font-size: 14px;
+}
+
+/* --- WLS attribution footer --- */
+
+.wls-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.wls-footer-mark {
+  border-radius: 50%;
+  flex-shrink: 0;
 }
