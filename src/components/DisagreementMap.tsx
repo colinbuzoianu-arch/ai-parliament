@@ -1,5 +1,7 @@
 "use client";
 
+import { PALETTE } from "@/src/lib/palette";
+
 export interface DisagreementAgentRun {
   doctrineId: string;
   verdict: string;
@@ -15,15 +17,10 @@ export interface DisagreementJointRuling {
 }
 
 // One color per conclusion group: index 0 is reserved for the majority; dissent groups
-// (agents who share a distinct dissenting position) cycle through the rest.
-const GROUP_COLORS = [
-  { bg: "#eef8f2", border: "#4a7" },
-  { bg: "#fdf0d5", border: "#d9a441" },
-  { bg: "#fde2e2", border: "#d97b7b" },
-  { bg: "#e0f2fe", border: "#5b9bd5" },
-  { bg: "#ede9fe", border: "#9b7bd5" },
-  { bg: "#fce7f3", border: "#d57bb0" },
-];
+// (agents who share a distinct dissenting position) cycle through the rest. Sourced from
+// the same shared palette used for per-agent identity elsewhere (chips, agent cards), so
+// consensus grouping and agent identity read as one connected color system.
+const GROUP_COLORS = PALETTE;
 
 function truncate(text: string | undefined, maxLen: number): string {
   if (!text) return "";
@@ -77,13 +74,19 @@ export function DisagreementMap({
 
   return (
     <div>
-      <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: "auto", border: "1px solid #e4e4e1", borderRadius: 10 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
-              <th style={{ padding: "6px 8px", fontWeight: 500, color: "#666" }}>Doctrine</th>
-              <th style={{ padding: "6px 8px", fontWeight: 500, color: "#666" }}>Final verdict</th>
-              <th style={{ padding: "6px 8px", fontWeight: 500, color: "#666" }}>Reasoning route</th>
+            <tr style={{ textAlign: "left", borderBottom: "1px solid #e4e4e1" }}>
+              <th className="stage-label" style={{ padding: "8px 10px" }}>
+                Doctrine
+              </th>
+              <th className="stage-label" style={{ padding: "8px 10px" }}>
+                Final verdict
+              </th>
+              <th className="stage-label" style={{ padding: "8px 10px" }}>
+                Reasoning route
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -93,7 +96,7 @@ export function DisagreementMap({
               const hasTension = tensionAgents.has(run.doctrineId);
               return (
                 <tr key={run.doctrineId} style={{ background: color.bg, borderBottom: "1px solid #eee" }}>
-                  <td style={{ padding: "6px 8px", borderLeft: `3px solid ${color.border}` }}>
+                  <td style={{ padding: "8px 10px", borderLeft: `3px solid ${color.border}`, fontWeight: 600 }}>
                     {labels[run.doctrineId] ?? run.doctrineId}
                     {hasTension && (
                       <span
@@ -104,8 +107,8 @@ export function DisagreementMap({
                       </span>
                     )}
                   </td>
-                  <td style={{ padding: "6px 8px" }}>{truncate(run.verdict, 140)}</td>
-                  <td style={{ padding: "6px 8px", color: "#555" }}>
+                  <td style={{ padding: "8px 10px" }}>{truncate(run.verdict, 140)}</td>
+                  <td style={{ padding: "8px 10px", color: "#666" }}>
                     {truncate(run.doctrinalAnalysis || run.framing, 110)}
                   </td>
                 </tr>
@@ -115,8 +118,8 @@ export function DisagreementMap({
         </table>
       </div>
       {(jointRuling.reasoningTensions?.length ?? 0) > 0 && (
-        <div style={{ marginTop: 10, fontSize: 12, color: "#a70" }}>
-          <p style={{ margin: "0 0 4px", fontWeight: 500 }}>⚠ Same conclusion, different reasoning:</p>
+        <div style={{ marginTop: 10, fontSize: 12, color: "#a3701f" }}>
+          <p style={{ margin: "0 0 4px", fontWeight: 600 }}>⚠ Same conclusion, different reasoning:</p>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {jointRuling.reasoningTensions!.map((t, i) => (
               <li key={i}>

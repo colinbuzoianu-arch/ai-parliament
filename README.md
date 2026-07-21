@@ -110,10 +110,24 @@ curl -X POST http://localhost:3000/api/cases \
   -H "content-type: application/json" \
   -d '{"title":"Case name","brief":"Full case text...","activeDoctrines":["spinoza","gramsci","weil"]}'
 ```
+The deliberation itself runs as three sequential requests, one per phase — this is what lets
+the UI show real progress ("independently reviewing", "cross-examining", "reaching a joint
+verdict") instead of one opaque spinner for the whole run:
 ```bash
-curl -X POST http://localhost:3000/api/orchestrate \
+curl -X POST http://localhost:3000/api/orchestrate/phase1 \
   -H "content-type: application/json" \
   -d '{"caseId":"<id from above>"}'
+# -> { "phase1": [...] }
+
+curl -X POST http://localhost:3000/api/orchestrate/phase2 \
+  -H "content-type: application/json" \
+  -d '{"caseId":"<id from above>","phase1":[...output of phase1 above...]}'
+# -> { "phase2Final": [...] }
+
+curl -X POST http://localhost:3000/api/orchestrate/phase3 \
+  -H "content-type: application/json" \
+  -d '{"caseId":"<id from above>","phase2Final":[...output of phase2 above...]}'
+# -> { "phase3": {...} }
 ```
 
 ## Attack-testing (separate sandbox)

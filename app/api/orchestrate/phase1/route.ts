@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/src/lib/supabaseClient";
-import { runDeliberation, type DoctrineId } from "@/src/orchestrator";
+import { runPhase1, type DoctrineId } from "@/src/orchestrator";
 
 export async function POST(req: NextRequest) {
   const { caseId } = (await req.json()) as { caseId: string };
@@ -15,15 +15,14 @@ export async function POST(req: NextRequest) {
   if (!baseUrl) return NextResponse.json({ error: "APP_BASE_URL env var not set" }, { status: 500 });
 
   try {
-    const result = await runDeliberation({
+    const phase1 = await runPhase1({
       caseId: caseRow.id,
       caseBrief: caseRow.brief,
       activeDoctrines: caseRow.active_doctrines as DoctrineId[],
-      phase2Rounds: caseRow.phase2_rounds,
       baseUrl,
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ phase1 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message ?? "Deliberation failed" }, { status: 500 });
+    return NextResponse.json({ error: err.message ?? "Phase 1 failed" }, { status: 500 });
   }
 }

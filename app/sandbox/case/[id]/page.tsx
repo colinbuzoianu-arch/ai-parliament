@@ -4,13 +4,7 @@
 // at least once.
 import { notFound } from "next/navigation";
 import { supabase } from "@/src/lib/supabaseClient";
-import { DisagreementMap } from "@/src/components/DisagreementMap";
-
-const LABELS: Record<string, string> = {
-  spinoza: "Spinoza", weil: "Weil", solzhenitsyn: "Solzhenitsyn", ibnrushd: "Ibn Rushd",
-  gandhi: "Gandhi", boethius: "Boethius", kropotkin: "Kropotkin", gramsci: "Gramsci",
-  diogenes: "Diogenes", luxemburg: "Luxemburg", laboetie: "La Boetie",
-};
+import { CaseResultTabs } from "@/src/components/CaseResultTabs";
 
 interface AgentRunRow {
   phase: number;
@@ -72,8 +66,8 @@ export default async function CasePermalinkPage({ params }: { params: Promise<{ 
   if (phase1Rows.length === 0) {
     return (
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 500 }}>{caseRow.title}</h1>
-        <p style={{ fontSize: 14, color: "#666" }}>
+        <h1 className="case-title">{caseRow.title}</h1>
+        <p style={{ fontSize: 14, color: "var(--ink-muted)" }}>
           This case hasn't been deliberated yet — no results to show.
         </p>
       </div>
@@ -90,93 +84,26 @@ export default async function CasePermalinkPage({ params }: { params: Promise<{ 
         synthesisNotes: phase3Row.reasoning,
         reasoningTensions: phase3Row.reasoning_tensions ?? [],
       }
-    : null;
+    : undefined;
 
   return (
     <div>
-      <p style={{ fontSize: 13 }}>
-        <a href="/sandbox" style={{ color: "#666" }}>
+      <p style={{ marginBottom: 8 }}>
+        <a href="/sandbox" className="back-link">
           ← back to sandbox
         </a>
       </p>
-      <h1 style={{ fontSize: 22, fontWeight: 500 }}>{caseRow.title}</h1>
-      <p style={{ fontSize: 14, lineHeight: 1.6, color: "#333" }}>{caseRow.brief}</p>
+      <h1 className="case-title">{caseRow.title}</h1>
+      <p className="case-brief">{caseRow.brief}</p>
 
-      <h2 style={{ fontSize: 16, fontWeight: 500, marginTop: "2rem" }}>Phase 1 — independent reasoning</h2>
-      {phase1.map((run) => (
-        <AgentBlock key={run.doctrineId} run={run} />
-      ))}
-
-      {phase2.length > 0 && (
-        <>
-          <h2 style={{ fontSize: 16, fontWeight: 500, marginTop: "2rem" }}>Phase 2 — after cross-examination</h2>
-          {phase2.map((run) => (
-            <AgentBlock key={run.doctrineId + "-p2"} run={run} showChange />
-          ))}
-        </>
-      )}
-
-      {jointRuling && (
-        <>
-          <h2 style={{ fontSize: 16, fontWeight: 500, marginTop: "2rem" }}>Phase 3 — joint ruling</h2>
-          <div style={{ background: "#f7f7f5", borderRadius: 8, padding: 16, marginBottom: 12 }}>
-            <p style={{ fontSize: 12, color: "#666", margin: "0 0 4px" }}>Majority position</p>
-            <p style={{ fontSize: 14, margin: 0 }}>{jointRuling.majorityPosition}</p>
-            {jointRuling.majoritySupport.length > 0 && (
-              <p style={{ fontSize: 12, color: "#666", marginTop: 8 }}>
-                Supported by: {jointRuling.majoritySupport.map((d) => LABELS[d] ?? d).join(", ")}
-              </p>
-            )}
-          </div>
-
-          <p style={{ fontSize: 12, color: "#666", margin: "1.5rem 0 6px" }}>Disagreement map</p>
-          <DisagreementMap agentRuns={phase2.length > 0 ? phase2 : phase1} jointRuling={jointRuling} labels={LABELS} />
-
-          <p style={{ fontSize: 12, color: "#666", margin: "1.5rem 0 6px" }}>Full synthesis / dissents</p>
-          <p style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{jointRuling.synthesisNotes}</p>
-        </>
-      )}
-    </div>
-  );
-}
-
-function AgentBlock({
-  run,
-  showChange,
-}: {
-  run: ReturnType<typeof toAgentRun>;
-  showChange?: boolean;
-}) {
-  return (
-    <div style={{ border: "1px solid #ddd", borderRadius: 8, marginBottom: 8, padding: "10px 14px" }}>
-      <p style={{ margin: "0 0 8px" }}>
-        <strong style={{ fontWeight: 500 }}>{LABELS[run.doctrineId] ?? run.doctrineId}</strong>
-        {showChange && (
-          <span style={{ fontSize: 12, color: run.verdictChangedFromPriorPhase ? "#a70" : "#999", marginLeft: 8 }}>
-            {run.verdictChangedFromPriorPhase ? "revised position" : "held position"}
-          </span>
-        )}
-      </p>
-      <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-        <Stage label="Framing" text={run.framing} />
-        <Stage label="Doctrinal analysis" text={run.doctrinalAnalysis} />
-        <Stage
-          label="Forecast"
-          text={`Objective: ${run.forecast.objective}\nProjected outcome: ${run.forecast.projectedOutcome}\nConfidence: ${run.forecast.confidence}`}
+      <div style={{ marginTop: "1.75rem" }}>
+        <CaseResultTabs
+          phase1={phase1}
+          phase2={phase2.length > 0 ? phase2 : undefined}
+          phase3={jointRuling}
+          phase2Hint="Final recorded position after cross-examination."
         />
-        <Stage label="Verdict" text={run.verdict} />
-        {run.changeJustification && <Stage label="Change justification" text={run.changeJustification} />}
       </div>
-    </div>
-  );
-}
-
-function Stage({ label, text }: { label: string; text?: string }) {
-  if (!text) return null;
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <p style={{ fontSize: 12, fontWeight: 500, color: "#666", margin: "0 0 2px" }}>{label}</p>
-      <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{text}</p>
     </div>
   );
 }

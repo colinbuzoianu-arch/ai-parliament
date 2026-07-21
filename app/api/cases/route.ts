@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/src/lib/supabaseClient";
+import { checkCaseSubstance } from "@/src/lib/caseGate";
 import { ALL_DOCTRINE_IDS, DEFAULT_DOCTRINE_IDS } from "@/src/orchestrator";
 
 export async function POST(req: NextRequest) {
@@ -13,6 +14,11 @@ export async function POST(req: NextRequest) {
 
   if (!title || !brief) {
     return NextResponse.json({ error: "title and brief are required" }, { status: 400 });
+  }
+
+  const substance = await checkCaseSubstance(title.trim(), brief.trim());
+  if (!substance.ok) {
+    return NextResponse.json({ error: substance.error }, { status: 400 });
   }
 
   const roster = activeDoctrines?.length ? activeDoctrines : DEFAULT_DOCTRINE_IDS;

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/src/lib/supabaseClient";
+import { checkCaseSubstance } from "@/src/lib/caseGate";
 import {
-  runPublicDeliberation,
+  runPublicPhase1,
+  runPublicPhase2,
+  runPhase3,
   checkAndIncrementDailyUsage,
   ALL_DOCTRINE_IDS,
   type DoctrineId,
@@ -38,6 +41,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Unknown doctrine id(s): ${invalid.join(", ")}` }, { status: 400 });
   }
 
+  const substance = await checkCaseSubstance(title.trim(), brief.trim());
+  if (!substance.ok) {
+    return NextResponse.json({ error: substance.error }, { status: 400 });
+  }
+
   const usage = await checkAndIncrementDailyUsage("submission");
   if (!usage.allowed) {
     return NextResponse.json(
@@ -67,15 +75,25 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   try {
-    // Self-healing cache in runPublicDeliberation handles Phase 1 live since nothing is
-    // cached yet for this brand-new case — this one call does Phase 1 + 2 + 3.
-    const result = await runPublicDeliberation({
+    // Self-healing cache in runPublicPhase1 handles Phase 1 live since nothing is cached
+    // yet for this brand-new case. This submission flow runs all three phases in one
+    // server-side pass (there's no interactive per-phase UI here, unlike /sandbox's
+    // rerun flow, which calls each phase as a separate request to show live progress).
+    const phase1 = await runPublicPhase1({
       caseId: caseRow.id,
       caseBrief: caseRow.brief,
       activeDoctrines,
       baseUrl,
     });
-    return NextResponse.json({ case: caseRow, ...result });
+    const phase2Final = await runPublicPhase2({
+      caseId: caseRow.id,
+      caseBrief: caseRow.brief,
+      activeDoctrines,
+      phase1Results: phase1,
+      baseUrl,
+    });
+    const phase3 = await runPhase3({ caseId: caseRow.id, phase2Results: phase2Final, isPublic: true });
+    return NextResponse.json({ case: caseRow, phase1, phase2Final, phase3 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message ?? "Deliberation failed" }, { status: 500 });
   }

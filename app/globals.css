@@ -1,0 +1,389 @@
+/* Design system for the public sandbox (/sandbox and /sandbox/case/[id]) only.
+   The admin page at / uses inline styles and does not reference these classes. */
+
+:root {
+  --ink: #1a1a1a;
+  --ink-soft: #444;
+  --ink-muted: #6b6b6b;
+  --ink-faint: #979797;
+  --border: #e4e4e1;
+  --surface: #ffffff;
+  --surface-muted: #f7f7f5;
+}
+
+/* --- Typography hierarchy --- */
+
+.page-title {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.page-intro {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  margin: 0 0 1.5rem;
+}
+
+.explainer-tagline {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: 2px 0 12px;
+}
+
+.thinker-list {
+  list-style: none;
+  margin: 0 0 1.75rem;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.thinker-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.thinker-list .chip-dot {
+  flex-shrink: 0;
+  transform: translateY(-1px);
+}
+
+.phase-list {
+  list-style: none;
+  margin: 0 0 1.75rem;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.phase-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.phase-number {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.disclaimer-box {
+  background: #fdf3e3;
+  border: 1px solid #f0dfb8;
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #6b5a2e;
+}
+.disclaimer-box-eyebrow {
+  color: #8a6118;
+  margin: 0 0 4px;
+}
+
+.section-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 6px;
+}
+
+.case-title {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+.case-brief {
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.back-link {
+  font-size: 13px;
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.back-link:hover {
+  color: var(--ink);
+}
+
+/* --- Phase tabs --- */
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
+.tab-btn {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.tab-btn:hover {
+  color: var(--ink-soft);
+}
+.tab-btn--active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+  font-weight: 600;
+}
+
+@keyframes tabFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.tab-panel {
+  animation: tabFadeIn 0.22s ease;
+}
+.tab-hint {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  margin: 0 0 12px;
+}
+
+/* --- Agent picker chips --- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.chip:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.chip:active:not(:disabled) {
+  transform: translateY(0);
+}
+.chip:disabled {
+  cursor: not-allowed;
+}
+.chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* --- Agent cards --- */
+
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.agent-card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+}
+.agent-card-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.agent-name {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.chevron {
+  font-size: 11px;
+  color: var(--ink-faint);
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+.chevron--open {
+  transform: rotate(180deg);
+}
+.agent-card-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+.agent-card-content {
+  padding: 0 14px 14px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+.stage {
+  margin-bottom: 10px;
+}
+.stage:last-child {
+  margin-bottom: 0;
+}
+.stage-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 2px;
+}
+.stage-text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.status-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.status-pill--revised {
+  background: #fdf0d5;
+  color: #8a6118;
+}
+.status-pill--held {
+  background: #f0f0ee;
+  color: #8a8a8a;
+}
+
+/* --- Joint verdict --- */
+
+.verdict-box {
+  background: var(--surface-muted);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.verdict-text {
+  font-size: 14.5px;
+  line-height: 1.6;
+  margin: 0;
+  color: var(--ink);
+}
+.verdict-support {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin: 8px 0 0;
+}
+
+/* --- Forms & buttons --- */
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 1rem 0 4px;
+}
+.text-input,
+.textarea-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color 0.15s ease;
+}
+.text-input:focus,
+.textarea-input:focus {
+  outline: none;
+  border-color: #9aa6b8;
+}
+
+.btn-primary {
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  background: #232323;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #000;
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  font-size: 13px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-muted);
+  padding: 0;
+  transition: color 0.15s ease;
+}
+.btn-ghost:hover {
+  color: var(--ink);
+}
+
+.status-text {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-top: 8px;
+}
+.error-text {
+  color: #a33;
+  margin-top: 1rem;
+  font-size: 14px;
+}

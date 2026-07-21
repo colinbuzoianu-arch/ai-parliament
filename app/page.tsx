@@ -52,6 +52,12 @@ interface RunResult {
   };
 }
 
+const PHASE_STATUS: Record<1 | 2 | 3, string> = {
+  1: "The agents are independently reviewing the case…",
+  2: "Cross-examining each other's positions…",
+  3: "Reaching a joint verdict…",
+};
+
 export default function Page() {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
@@ -60,6 +66,7 @@ export default function Page() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
+  const [runningPhase, setRunningPhase] = useState<1 | 2 | 3 | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RunResult | null>(null);
 
@@ -92,21 +99,46 @@ export default function Page() {
       });
       const caseData = await caseRes.json();
       if (!caseRes.ok) throw new Error(caseData.error ?? "Failed to create case");
+      const caseId = caseData.id;
 
-      const runRes = await fetch("/api/orchestrate", {
+      setRunningPhase(1);
+      const phase1Res = await fetch("/api/orchestrate/phase1", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ caseId: caseData.id }),
+        body: JSON.stringify({ caseId }),
       });
-      const runData = await runRes.json();
-      if (!runRes.ok) throw new Error(runData.error ?? "Deliberation failed");
+      const phase1Data = await phase1Res.json();
+      if (!phase1Res.ok) throw new Error(phase1Data.error ?? "Phase 1 failed");
 
-      setResult(runData);
+      setRunningPhase(2);
+      const phase2Res = await fetch("/api/orchestrate/phase2", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ caseId, phase1: phase1Data.phase1 }),
+      });
+      const phase2Data = await phase2Res.json();
+      if (!phase2Res.ok) throw new Error(phase2Data.error ?? "Phase 2 failed");
+
+      setRunningPhase(3);
+      const phase3Res = await fetch("/api/orchestrate/phase3", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ caseId, phase2Final: phase2Data.phase2Final }),
+      });
+      const phase3Data = await phase3Res.json();
+      if (!phase3Res.ok) throw new Error(phase3Data.error ?? "Phase 3 failed");
+
+      setResult({
+        phase1: phase1Data.phase1,
+        phase2Final: phase2Data.phase2Final,
+        phase3: phase3Data.phase3,
+      });
       setActiveTab(1);
     } catch (err: any) {
       setError(err.message ?? "Something went wrong");
     } finally {
       setLoading(false);
+      setRunningPhase(null);
     }
   }
 
@@ -179,6 +211,9 @@ export default function Page() {
         >
           {loading ? "Running deliberation..." : "Run deliberation"}
         </button>
+        {loading && runningPhase && (
+          <p style={{ fontSize: 13, color: "#666", marginTop: 8 }}>{PHASE_STATUS[runningPhase]}</p>
+        )}
       </div>
 
       {error && <p style={{ color: "#a33", marginTop: "1rem" }}>{error}</p>}

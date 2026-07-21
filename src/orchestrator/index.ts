@@ -63,16 +63,6 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-interface RunOptions {
-  caseId: string;
-  caseBrief: string;
-  /** Subset of ALL_DOCTRINE_IDS. Defaults to all 9 if omitted. */
-  activeDoctrines?: DoctrineId[];
-  /** How many Phase 2 cross-examination rounds to run. Default 2, capped at 3. */
-  phase2Rounds?: number;
-  baseUrl: string; // e.g. https://your-deployment.vercel.app — needed for server-to-route fetches
-}
-
 async function callAgent(baseUrl: string, doctrineId: string, payload: unknown) {
   const res = await fetch(`${baseUrl}/api/agents/${doctrineId}`, {
     method: "POST",
@@ -112,12 +102,22 @@ async function logRun(caseId: string, phase: number, record: AgentRecord, isPubl
   if (error) throw new Error(`Audit log insert failed: ${error.message}`);
 }
 
-export async function runDeliberation(opts: RunOptions) {
+// The three phases below are split into separate exports (rather than one monolithic
+// runDeliberation) so the API layer can expose one request per phase — this lets the
+// client show real progress instead of a single opaque spinner across the whole run.
+
+interface Phase1Options {
+  caseId: string;
+  caseBrief: string;
+  activeDoctrines?: DoctrineId[];
+  baseUrl: string;
+}
+
+export async function runPhase1(opts: Phase1Options): Promise<AgentRecord[]> {
   const roster = opts.activeDoctrines?.length ? opts.activeDoctrines : ALL_DOCTRINE_IDS;
-  const phase2Rounds = Math.min(opts.phase2Rounds ?? 2, 3);
 
   // Phase 1 — independent reasoning, fully isolated, no agent sees another's output.
-  const phase1Results: AgentRecord[] = await mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) =>
+  return mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) =>
     callAgent(opts.baseUrl, id, {
       caseId: opts.caseId,
       phase: 1,
@@ -127,11 +127,25 @@ export async function runDeliberation(opts: RunOptions) {
       return r;
     })
   );
+}
+
+interface Phase2Options {
+  caseId: string;
+  caseBrief: string;
+  activeDoctrines?: DoctrineId[];
+  phase1Results: AgentRecord[];
+  phase2Rounds?: number;
+  baseUrl: string;
+}
+
+export async function runPhase2(opts: Phase2Options): Promise<AgentRecord[]> {
+  const roster = opts.activeDoctrines?.length ? opts.activeDoctrines : ALL_DOCTRINE_IDS;
+  const phase2Rounds = Math.min(opts.phase2Rounds ?? 2, 3);
 
   // Phase 2 — bounded cross-examination rounds. Each round, every agent sees the
   // FULL current set of positions (from the prior round) and may revise, via a
   // fresh isolated call each time — no shared memory between calls.
-  let currentPositions = phase1Results;
+  let currentPositions = opts.phase1Results;
   for (let round = 0; round < phase2Rounds; round++) {
     currentPositions = await mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) => {
       const priorPositions = currentPositions
@@ -149,9 +163,19 @@ export async function runDeliberation(opts: RunOptions) {
     });
   }
 
+  return currentPositions;
+}
+
+interface Phase3Options {
+  caseId: string;
+  phase2Results: AgentRecord[];
+  isPublic?: boolean;
+}
+
+export async function runPhase3(opts: Phase3Options) {
   // Phase 3 — a SIXTH, separate aggregator (not one of the 9) synthesizes a joint
   // ruling: majority + attributed dissents. No forced consensus.
-  const jointRuling = await aggregate(opts.caseId, currentPositions);
+  const jointRuling = await aggregate(opts.caseId, opts.phase2Results);
 
   const { error } = await supabase.from("agent_runs").insert({
     case_id: opts.caseId,
@@ -164,14 +188,11 @@ export async function runDeliberation(opts: RunOptions) {
     majority_support: jointRuling.majoritySupport,
     dissents: jointRuling.dissents,
     reasoning_tensions: jointRuling.reasoningTensions,
+    is_public: opts.isPublic ?? false,
   });
   if (error) throw new Error(`Audit log insert failed (phase 3): ${error.message}`);
 
-  return {
-    phase1: phase1Results,
-    phase2Final: currentPositions,
-    phase3: jointRuling,
-  };
+  return jointRuling;
 }
 
 // --- Public sandbox path ---
@@ -219,7 +240,7 @@ export async function checkAndIncrementDailyUsage(
   return { allowed: true, count: existing.run_count + 1 };
 }
 
-export async function runPublicDeliberation(opts: PublicRunOptions) {
+export async function runPublicPhase1(opts: PublicRunOptions): Promise<AgentRecord[]> {
   const roster = opts.activeDoctrines;
 
   const { data: cachedRows, error: cacheError } = await supabase
@@ -270,11 +291,23 @@ export async function runPublicDeliberation(opts: PublicRunOptions) {
     verdictChangedFromPriorPhase: false,
   }));
 
-  const phase1Results: AgentRecord[] = [...cachedResults, ...freshResults];
+  return [...cachedResults, ...freshResults];
+}
+
+interface PublicPhase2Options {
+  caseId: string;
+  caseBrief: string;
+  activeDoctrines: DoctrineId[];
+  phase1Results: AgentRecord[];
+  baseUrl: string;
+}
+
+export async function runPublicPhase2(opts: PublicPhase2Options): Promise<AgentRecord[]> {
+  const roster = opts.activeDoctrines;
 
   // Phase 2 — exactly one live round for the public sandbox (cost control).
-  const currentPositions: AgentRecord[] = await mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) => {
-    const priorPositions = phase1Results
+  return mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) => {
+    const priorPositions = opts.phase1Results
       .filter((p) => p.doctrineId !== id)
       .map((p) => ({ doctrineId: p.doctrineId, verdict: p.verdict, reasoning: p.reasoning }));
     return callAgent(opts.baseUrl, id, {
@@ -287,25 +320,4 @@ export async function runPublicDeliberation(opts: PublicRunOptions) {
       return r;
     });
   });
-
-  // Phase 3 — live aggregation.
-  const jointRuling = await aggregate(opts.caseId, currentPositions);
-  await supabase.from("agent_runs").insert({
-    case_id: opts.caseId,
-    phase: 3,
-    agent_doctrine: "_aggregator",
-    verdict: jointRuling.majorityPosition,
-    reasoning: jointRuling.synthesisNotes,
-    verdict_changed_from_prior_phase: false,
-    majority_support: jointRuling.majoritySupport,
-    dissents: jointRuling.dissents,
-    reasoning_tensions: jointRuling.reasoningTensions,
-    is_public: true,
-  });
-
-  return {
-    phase1: phase1Results,
-    phase2Final: currentPositions,
-    phase3: jointRuling,
-  };
 }
