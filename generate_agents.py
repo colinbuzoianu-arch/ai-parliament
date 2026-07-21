@@ -270,6 +270,10 @@ export interface DeliberationInput {{
 
 export interface DeliberationOutput {{
   doctrineId: string;
+  /** One self-contained sentence: verdict + core reason. This is what other agents see of
+   *  this position in Phase 2 — cheaper than the full reasoning and, since the model writes
+   *  it knowing that's its job, more targeted than a truncated excerpt would be. */
+  headline: string;
   framing: string;
   doctrinalAnalysis: string;
   forecast: Forecast;
@@ -292,6 +296,13 @@ const SUBMIT_DELIBERATION_TOOL = {{
     parameters: {{
       type: "object",
       properties: {{
+        headline: {{
+          type: "string",
+          description:
+            "One self-contained sentence stating your verdict and its core reason. Other agents " +
+            "will see ONLY this (not your full framing/analysis) when cross-examining in Phase 2, " +
+            "so it must stand alone as a fair summary of your position.",
+        }},
         framing: {{
           type: "string",
           description: "What this doctrine is actually being asked to evaluate in this case.",
@@ -325,7 +336,7 @@ const SUBMIT_DELIBERATION_TOOL = {{
             "versus social pressure to converge. Label a pressure-driven change as such.",
         }},
       }},
-      required: ["framing", "doctrinalAnalysis", "forecast", "verdict", "changed"],
+      required: ["headline", "framing", "doctrinalAnalysis", "forecast", "verdict", "changed"],
     }},
   }},
 }} as const;
@@ -371,6 +382,7 @@ function parseModelOutput(out: any): DeliberationOutput {{
 
   return {{
     doctrineId: doctrineMeta.id,
+    headline: out.headline ?? "",
     framing: out.framing ?? "",
     doctrinalAnalysis: out.doctrinalAnalysis ?? "",
     forecast,

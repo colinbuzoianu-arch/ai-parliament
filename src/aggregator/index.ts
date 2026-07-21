@@ -7,6 +7,9 @@ import { callOpenAITool } from "@/src/lib/openaiClient";
 
 export interface AgentRecord {
   doctrineId: string;
+  /** One-sentence verdict + core reason — see generate_agents.py. Optional since cached
+   *  phase1_cache rows written before this field existed won't have it. */
+  headline?: string;
   framing?: string;
   doctrinalAnalysis?: string;
   forecast?: { objective: string; projectedOutcome: string; confidence: string };

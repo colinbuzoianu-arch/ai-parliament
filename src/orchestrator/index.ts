@@ -84,16 +84,21 @@ async function callAgent(baseUrl: string, doctrineId: string, payload: unknown) 
 
 // Phase 2 sends every OTHER agent's position to each agent, every round — with a full
 // roster and multiple rounds this is the dominant cost of a run (an O(roster²) blow-up of
-// each agent's full framing+analysis+forecast text, repeated per round). Sending the
-// doctrinal analysis (the actual substantive reasoning, skipping the boilerplate framing
-// preamble) truncated to a summary-length excerpt keeps cross-examination meaningful while
-// cutting that payload by roughly 5-10x.
-const PRIOR_POSITION_SUMMARY_LEN = 400;
+// each agent's full framing+analysis+forecast text, repeated per round). Each agent now
+// writes its own one-sentence `headline` (verdict + core reason) specifically so that's
+// what gets shared here instead — cheaper than the full reasoning, and since the model
+// writes it knowing that's its job, more targeted than an arbitrary truncated excerpt.
+// Fall back to a short truncation for any record that predates the headline field (e.g.
+// an older phase1_cache row).
+const PRIOR_POSITION_FALLBACK_LEN = 200;
 
 function summarizePriorPosition(record: AgentRecord): { doctrineId: string; verdict: string; reasoning: string } {
+  if (record.headline) {
+    return { doctrineId: record.doctrineId, verdict: record.verdict, reasoning: record.headline };
+  }
   const source = record.doctrinalAnalysis || record.reasoning;
-  const reasoning = source.length > PRIOR_POSITION_SUMMARY_LEN
-    ? source.slice(0, PRIOR_POSITION_SUMMARY_LEN).trim() + "…"
+  const reasoning = source.length > PRIOR_POSITION_FALLBACK_LEN
+    ? source.slice(0, PRIOR_POSITION_FALLBACK_LEN).trim() + "…"
     : source;
   return { doctrineId: record.doctrineId, verdict: record.verdict, reasoning };
 }
@@ -224,9 +229,12 @@ interface PublicRunOptions {
   baseUrl: string;
 }
 
+// Conservative launch values — deliberately lowered ahead of going live under the WLS
+// subdomain, before real per-run OpenAI cost is confirmed against the billing dashboard.
+// Raise these once actual spend/day is known and comfortable.
 const DAILY_CAPS: Record<"rerun" | "submission", number> = {
-  rerun: 40,
-  submission: 15,
+  rerun: 15,
+  submission: 5,
 };
 
 export async function checkAndIncrementDailyUsage(
@@ -279,6 +287,7 @@ export async function runPublicPhase1(opts: PublicRunOptions): Promise<AgentReco
         await supabase.from("phase1_cache").upsert({
           case_id: opts.caseId,
           doctrine_id: r.doctrineId,
+          headline: (r as any).headline,
           framing: (r as any).framing,
           doctrinal_analysis: (r as any).doctrinalAnalysis,
           forecast_objective: (r as any).forecast?.objective,
@@ -295,6 +304,7 @@ export async function runPublicPhase1(opts: PublicRunOptions): Promise<AgentReco
 
   const cachedResults: AgentRecord[] = (cachedRows ?? []).map((row: any) => ({
     doctrineId: row.doctrine_id,
+    headline: row.headline ?? undefined,
     framing: row.framing,
     doctrinalAnalysis: row.doctrinal_analysis,
     forecast: {

@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/src/lib/supabaseClient";
 import { checkCaseSubstance } from "@/src/lib/caseGate";
-import {
-  runPublicPhase1,
-  runPublicPhase2,
-  runPhase3,
-  checkAndIncrementDailyUsage,
-  ALL_DOCTRINE_IDS,
-  type DoctrineId,
-} from "@/src/orchestrator";
+import { checkAndIncrementDailyUsage, ALL_DOCTRINE_IDS, type DoctrineId } from "@/src/orchestrator";
 
 const MAX_TITLE_LEN = 140;
 const MAX_BRIEF_LEN = 4000;
 const MAX_AGENTS_PER_SUBMISSION = 6; // bounds worst-case live Phase 1 calls for a brand-new case
 
+// This route only validates and creates the case row — it does NOT run the deliberation.
+// The client runs phase1/phase2/phase3 itself afterward via the same
+// /api/public/deliberate/phase{1,2,3} endpoints the rerun flow uses (a freshly-created
+// "pending" case is eligible there too — see the not-rejected check in those routes), so
+// a first-time submission and a later rerun share one code path and one progress UI.
 export async function POST(req: NextRequest) {
   const { title, brief, activeDoctrines } = (await req.json()) as {
     title: string;
@@ -54,9 +52,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const baseUrl = process.env.APP_BASE_URL;
-  if (!baseUrl) return NextResponse.json({ error: "APP_BASE_URL env var not set" }, { status: 500 });
-
   const { data: caseRow, error } = await supabase
     .from("cases")
     .insert({
@@ -65,7 +60,7 @@ export async function POST(req: NextRequest) {
       active_doctrines: activeDoctrines,
       phase2_rounds: 1,
       is_seeded: false,
-      is_public: false, // stays hidden from the public gallery until an admin approves it
+      is_public: false,
       status: "pending",
       source: "user_submitted",
     })
@@ -74,27 +69,5 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  try {
-    // Self-healing cache in runPublicPhase1 handles Phase 1 live since nothing is cached
-    // yet for this brand-new case. This submission flow runs all three phases in one
-    // server-side pass (there's no interactive per-phase UI here, unlike the root page's
-    // rerun flow, which calls each phase as a separate request to show live progress).
-    const phase1 = await runPublicPhase1({
-      caseId: caseRow.id,
-      caseBrief: caseRow.brief,
-      activeDoctrines,
-      baseUrl,
-    });
-    const phase2Final = await runPublicPhase2({
-      caseId: caseRow.id,
-      caseBrief: caseRow.brief,
-      activeDoctrines,
-      phase1Results: phase1,
-      baseUrl,
-    });
-    const phase3 = await runPhase3({ caseId: caseRow.id, phase2Results: phase2Final, isPublic: true });
-    return NextResponse.json({ case: caseRow, phase1, phase2Final, phase3 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message ?? "Deliberation failed" }, { status: 500 });
-  }
+  return NextResponse.json({ case: caseRow });
 }

@@ -16,7 +16,6 @@ interface PublicCase {
   title: string;
   brief: string;
   active_doctrines: string[];
-  source?: "seeded" | "user_submitted";
 }
 
 const MAX_SUBMISSION_AGENTS = 6;
@@ -26,6 +25,41 @@ const PHASE_STATUS: Record<1 | 2 | 3, string> = {
   2: "Cross-examining each other's positions…",
   3: "Reaching a joint verdict…",
 };
+
+// Hardcoded, not fetched — no database-backed case list. Text reused from
+// scripts/seed-cases.mjs's SEED_CASES. Clicking one only pre-fills the form fields below;
+// it never creates or runs a case on its own.
+const EXAMPLE_CASES: { title: string; brief: string }[] = [
+  {
+    title: "Municipal facial-recognition camera network",
+    brief: `A city council is considering a proposal to install a networked facial-recognition
+camera system across public transit hubs and major intersections, framed as a public-safety
+and traffic-management measure. The system would be operated by the city's police department,
+with data retained for 12 months. Proponents cite a projected 20% reduction in reported street
+crime based on a pilot in another city. Opponents note the pilot's data collection methodology
+was not independently audited, and that no legal framework currently governs who else may
+access the footage, for how long, or under what oversight.`,
+  },
+  {
+    title: "Universal basic income pilot, funded by a windfall tax",
+    brief: `A regional government proposes a 3-year basic income pilot for 5,000 households,
+funded by a new windfall tax on energy companies operating in the region. The stated objective
+is to test effects on employment, health, and local spending. The energy companies argue the tax
+will reduce investment in the region and could cost jobs elsewhere in their supply chain. The
+pilot's outcome measures and success thresholds are being finalized concurrently with the
+funding legislation, not before it.`,
+  },
+  {
+    title: "Mandatory algorithmic transparency for public contract allocation",
+    brief: `A proposed law would require any government body using automated or AI-assisted
+systems to help decide public contract awards to publish the system's decision criteria and
+underlying training data sources, and to grant independent auditors ongoing access to the
+system's methodology. Government agencies argue this will slow procurement and expose
+commercially sensitive vendor information. Transparency advocates argue that without this,
+patterns of correlation between political support and contract allocation are undetectable by
+outside parties.`,
+  },
+];
 
 export default function SandboxPage() {
   const [selectedCase, setSelectedCase] = useState<PublicCase | null>(null);
@@ -48,51 +82,25 @@ export default function SandboxPage() {
     setNewRoster(next);
   }
 
-  async function submitOwnCase() {
+  function useExample(example: { title: string; brief: string }) {
+    setNewTitle(example.title);
+    setNewBrief(example.brief);
+  }
+
+  // Shared by both the initial submission and later reruns with a different panel, so the
+  // two paths always show identical phase-by-phase progress. Takes caseId/activeDoctrines
+  // as parameters rather than reading selectedCase/roster from state, so it can be called
+  // right after setSelectedCase() without waiting on a stale closure.
+  async function runDeliberation(caseId: string, activeDoctrines: string[]) {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const res = await fetch("/api/public/submit-case", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: newTitle,
-          brief: newBrief,
-          activeDoctrines: Array.from(newRoster),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Submission failed");
-      setSelectedCase(data.case);
-      setRoster(new Set(data.case.active_doctrines));
-      setResult(data);
-    } catch (err: any) {
-      setError(err.message ?? "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function toggleAgent(id: string) {
-    const next = new Set(roster);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setRoster(next);
-  }
-
-  async function run() {
-    if (!selectedCase) return;
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    try {
-      const activeDoctrines = Array.from(roster);
-
       setRunningPhase(1);
       const phase1Res = await fetch("/api/public/deliberate/phase1", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ caseId: selectedCase.id, activeDoctrines }),
+        body: JSON.stringify({ caseId, activeDoctrines }),
       });
       const phase1Data = await phase1Res.json();
       if (!phase1Res.ok) throw new Error(phase1Data.error ?? "Phase 1 failed");
@@ -101,7 +109,7 @@ export default function SandboxPage() {
       const phase2Res = await fetch("/api/public/deliberate/phase2", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ caseId: selectedCase.id, activeDoctrines, phase1: phase1Data.phase1 }),
+        body: JSON.stringify({ caseId, activeDoctrines, phase1: phase1Data.phase1 }),
       });
       const phase2Data = await phase2Res.json();
       if (!phase2Res.ok) throw new Error(phase2Data.error ?? "Phase 2 failed");
@@ -110,7 +118,7 @@ export default function SandboxPage() {
       const phase3Res = await fetch("/api/public/deliberate/phase3", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ caseId: selectedCase.id, phase2Final: phase2Data.phase2Final }),
+        body: JSON.stringify({ caseId, phase2Final: phase2Data.phase2Final }),
       });
       const phase3Data = await phase3Res.json();
       if (!phase3Res.ok) throw new Error(phase3Data.error ?? "Phase 3 failed");
@@ -128,6 +136,36 @@ export default function SandboxPage() {
     }
   }
 
+  async function submitOwnCase() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/public/submit-case", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: newTitle,
+          brief: newBrief,
+          activeDoctrines: Array.from(newRoster),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Submission failed");
+      setSelectedCase(data.case);
+      setRoster(new Set(data.case.active_doctrines));
+      await runDeliberation(data.case.id, data.case.active_doctrines);
+    } catch (err: any) {
+      setError(err.message ?? "Something went wrong");
+      setLoading(false);
+    }
+  }
+
+  function toggleAgent(id: string) {
+    const next = new Set(roster);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setRoster(next);
+  }
+
   return (
     <div>
       <SandboxExplainer />
@@ -138,6 +176,18 @@ export default function SandboxPage() {
             This runs a live deliberation right now. To keep the sandbox affordable, pick up to{" "}
             {MAX_SUBMISSION_AGENTS} agents for a new case.
           </p>
+
+          <p className="section-eyebrow" style={{ marginTop: "1rem" }}>
+            Try an example
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: "1rem" }}>
+            {EXAMPLE_CASES.map((ex) => (
+              <button key={ex.title} type="button" className="example-btn" onClick={() => useExample(ex)}>
+                {ex.title}
+              </button>
+            ))}
+          </div>
+
           <label className="field-label">Title</label>
           <input
             value={newTitle}
@@ -177,6 +227,7 @@ export default function SandboxPage() {
           >
             {loading ? "Running deliberation..." : "Submit and run"}
           </button>
+          {loading && runningPhase && <p className="status-text">{PHASE_STATUS[runningPhase]}</p>}
           {error && <p className="error-text">{error}</p>}
         </div>
       )}
@@ -198,14 +249,11 @@ export default function SandboxPage() {
             ))}
           </div>
 
-          {roster.size > 0 && (
-            <p className="status-text" style={{ marginTop: 0, marginBottom: 8 }}>
-              {roster.size} agent{roster.size === 1 ? "" : "s"} selected — this will make about{" "}
-              {roster.size + 1} live API call{roster.size + 1 === 1 ? "" : "s"} (Phase 2 cross-examination
-              + Phase 3 joint verdict; Phase 1 only adds calls for any agent not yet run on this case).
-            </p>
-          )}
-          <button className="btn-primary" onClick={run} disabled={loading || roster.size === 0}>
+          <button
+            className="btn-primary"
+            onClick={() => runDeliberation(selectedCase.id, Array.from(roster))}
+            disabled={loading || roster.size === 0}
+          >
             {loading ? "Running live deliberation..." : "Run deliberation"}
           </button>
           {loading && runningPhase && <p className="status-text">{PHASE_STATUS[runningPhase]}</p>}
