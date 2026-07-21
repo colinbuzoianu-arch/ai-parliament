@@ -97,6 +97,12 @@ update cases set status = 'approved' where is_public = true and status = 'pendin
 -- rows already logged under Claude keep their historically-accurate model value.
 alter table agent_runs alter column model set default 'gpt-4o';
 
+-- Migration: switched from gpt-4o to gpt-4o-mini for cost (roughly 16x cheaper per token,
+-- and Phase 2's payload was the dominant cost driver — see summarizePriorPosition in
+-- src/orchestrator/index.ts). Only affects future inserts; rows already logged under gpt-4o
+-- keep their historically-accurate model value.
+alter table agent_runs alter column model set default 'gpt-4o-mini';
+
 -- Enforce append-only at the database level, not just in application code.
 -- Revoke UPDATE/DELETE from the roles the app uses; only INSERT and SELECT remain.
 revoke update, delete on agent_runs from public;

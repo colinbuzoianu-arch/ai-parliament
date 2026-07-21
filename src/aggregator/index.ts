@@ -132,7 +132,7 @@ export async function aggregate(
 
   const out = await callOpenAITool({
     apiKey,
-    model: "gpt-4o",
+    model: "gpt-4o-mini",
     maxCompletionTokens: 3000,
     messages: [
       { role: "system", content: AGGREGATOR_SYSTEM_PROMPT },

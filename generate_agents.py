@@ -338,7 +338,7 @@ export async function deliberate(input: DeliberationInput): Promise<Deliberation
 
   const out = await callOpenAITool({{
     apiKey,
-    model: "gpt-4o",
+    model: "gpt-4o-mini",
     maxCompletionTokens: 2500,
     messages: [
       {{ role: "system", content: systemPrompt }},

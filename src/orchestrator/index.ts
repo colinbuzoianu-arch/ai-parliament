@@ -82,6 +82,22 @@ async function callAgent(baseUrl: string, doctrineId: string, payload: unknown) 
   return res.json() as Promise<AgentRecord>;
 }
 
+// Phase 2 sends every OTHER agent's position to each agent, every round — with a full
+// roster and multiple rounds this is the dominant cost of a run (an O(roster²) blow-up of
+// each agent's full framing+analysis+forecast text, repeated per round). Sending the
+// doctrinal analysis (the actual substantive reasoning, skipping the boilerplate framing
+// preamble) truncated to a summary-length excerpt keeps cross-examination meaningful while
+// cutting that payload by roughly 5-10x.
+const PRIOR_POSITION_SUMMARY_LEN = 400;
+
+function summarizePriorPosition(record: AgentRecord): { doctrineId: string; verdict: string; reasoning: string } {
+  const source = record.doctrinalAnalysis || record.reasoning;
+  const reasoning = source.length > PRIOR_POSITION_SUMMARY_LEN
+    ? source.slice(0, PRIOR_POSITION_SUMMARY_LEN).trim() + "…"
+    : source;
+  return { doctrineId: record.doctrineId, verdict: record.verdict, reasoning };
+}
+
 async function logRun(caseId: string, phase: number, record: AgentRecord, isPublic = false) {
   const { error } = await supabase.from("agent_runs").insert({
     case_id: caseId,
@@ -150,7 +166,7 @@ export async function runPhase2(opts: Phase2Options): Promise<AgentRecord[]> {
     currentPositions = await mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) => {
       const priorPositions = currentPositions
         .filter((p) => p.doctrineId !== id)
-        .map((p) => ({ doctrineId: p.doctrineId, verdict: p.verdict, reasoning: p.reasoning }));
+        .map(summarizePriorPosition);
       return callAgent(opts.baseUrl, id, {
         caseId: opts.caseId,
         phase: 2,
@@ -309,7 +325,7 @@ export async function runPublicPhase2(opts: PublicPhase2Options): Promise<AgentR
   return mapWithConcurrency(roster, AGENT_CALL_CONCURRENCY, (id) => {
     const priorPositions = opts.phase1Results
       .filter((p) => p.doctrineId !== id)
-      .map((p) => ({ doctrineId: p.doctrineId, verdict: p.verdict, reasoning: p.reasoning }));
+      .map(summarizePriorPosition);
     return callAgent(opts.baseUrl, id, {
       caseId: opts.caseId,
       phase: 2,
