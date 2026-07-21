@@ -229,12 +229,15 @@ interface PublicRunOptions {
   baseUrl: string;
 }
 
-// Conservative launch values — deliberately lowered ahead of going live under the WLS
-// subdomain, before real per-run OpenAI cost is confirmed against the billing dashboard.
-// Raise these once actual spend/day is known and comfortable.
+// Raised from the initial conservative launch values (rerun: 15, submission: 5) now that
+// the gpt-4o-mini switch + Phase 2 payload trim (headline field, see summarizePriorPosition)
+// have cut per-run cost roughly 30-50x. At current cost (~$0.01-0.02/run), these caps bound
+// worst-case spend at roughly $2-4/day even if fully maxed out — still a real ceiling against
+// abuse, just no longer the tightest possible one. The OpenAI account-level hard spend limit
+// is the actual backstop; revisit these once real spend/day is visible on the dashboard.
 const DAILY_CAPS: Record<"rerun" | "submission", number> = {
-  rerun: 15,
-  submission: 5,
+  rerun: 200,
+  submission: 100,
 };
 
 export async function checkAndIncrementDailyUsage(
