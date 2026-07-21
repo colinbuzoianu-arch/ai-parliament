@@ -5,6 +5,7 @@
 
 import { supabase } from "@/src/lib/supabaseClient";
 import { aggregate, type AgentRecord } from "@/src/aggregator";
+import type { Locale } from "@/src/i18n/locale";
 
 // All 11 modules that exist in src/agents/ - used to validate any requested roster.
 export const ALL_DOCTRINE_IDS = [
@@ -103,7 +104,13 @@ function summarizePriorPosition(record: AgentRecord): { doctrineId: string; verd
   return { doctrineId: record.doctrineId, verdict: record.verdict, reasoning };
 }
 
-async function logRun(caseId: string, phase: number, record: AgentRecord, isPublic = false) {
+async function logRun(
+  caseId: string,
+  phase: number,
+  record: AgentRecord,
+  isPublic = false,
+  locale?: Locale
+) {
   const { error } = await supabase.from("agent_runs").insert({
     case_id: caseId,
     phase,
@@ -118,6 +125,7 @@ async function logRun(caseId: string, phase: number, record: AgentRecord, isPubl
     verdict_changed_from_prior_phase: record.verdictChangedFromPriorPhase,
     change_justification: record.changeJustification ?? null,
     is_public: isPublic,
+    locale: locale ?? "en",
   });
   // Insert-only table: if this fails, do not retry with an update — surface the error.
   if (error) throw new Error(`Audit log insert failed: ${error.message}`);
@@ -132,6 +140,7 @@ interface Phase1Options {
   caseBrief: string;
   activeDoctrines?: DoctrineId[];
   baseUrl: string;
+  locale?: Locale;
 }
 
 export async function runPhase1(opts: Phase1Options): Promise<AgentRecord[]> {
@@ -143,8 +152,9 @@ export async function runPhase1(opts: Phase1Options): Promise<AgentRecord[]> {
       caseId: opts.caseId,
       phase: 1,
       caseBrief: opts.caseBrief,
+      locale: opts.locale,
     }).then(async (r) => {
-      await logRun(opts.caseId, 1, r);
+      await logRun(opts.caseId, 1, r, false, opts.locale);
       return r;
     })
   );
@@ -157,6 +167,7 @@ interface Phase2Options {
   phase1Results: AgentRecord[];
   phase2Rounds?: number;
   baseUrl: string;
+  locale?: Locale;
 }
 
 export async function runPhase2(opts: Phase2Options): Promise<AgentRecord[]> {
@@ -177,8 +188,9 @@ export async function runPhase2(opts: Phase2Options): Promise<AgentRecord[]> {
         phase: 2,
         caseBrief: opts.caseBrief,
         priorPositions,
+        locale: opts.locale,
       }).then(async (r) => {
-        await logRun(opts.caseId, 2, r);
+        await logRun(opts.caseId, 2, r, false, opts.locale);
         return r;
       });
     });
@@ -191,12 +203,13 @@ interface Phase3Options {
   caseId: string;
   phase2Results: AgentRecord[];
   isPublic?: boolean;
+  locale?: Locale;
 }
 
 export async function runPhase3(opts: Phase3Options) {
   // Phase 3 — a SIXTH, separate aggregator (not one of the 9) synthesizes a joint
   // ruling: majority + attributed dissents. No forced consensus.
-  const jointRuling = await aggregate(opts.caseId, opts.phase2Results);
+  const jointRuling = await aggregate(opts.caseId, opts.phase2Results, opts.locale);
 
   const { error } = await supabase.from("agent_runs").insert({
     case_id: opts.caseId,
@@ -210,6 +223,7 @@ export async function runPhase3(opts: Phase3Options) {
     dissents: jointRuling.dissents,
     reasoning_tensions: jointRuling.reasoningTensions,
     is_public: opts.isPublic ?? false,
+    locale: opts.locale ?? "en",
   });
   if (error) throw new Error(`Audit log insert failed (phase 3): ${error.message}`);
 
@@ -227,6 +241,7 @@ interface PublicRunOptions {
   caseBrief: string;
   activeDoctrines: DoctrineId[];
   baseUrl: string;
+  locale?: Locale;
 }
 
 // Raised from the initial conservative launch values (rerun: 15, submission: 5) now that
@@ -284,8 +299,11 @@ export async function runPublicPhase1(opts: PublicRunOptions): Promise<AgentReco
   // Any agent not yet cached for this case runs Phase 1 live now, then gets cached —
   // this is what lets a brand-new user-submitted case work with no pre-seeding step,
   // while still making every subsequent request for the same case/agent free.
+  // NOTE: the cache is keyed on (case_id, doctrine_id) only, not locale — a cache hit here
+  // returns whatever language it was first computed in, regardless of the current visitor's
+  // selected locale. Phase 2/3 (always live, never cached) do respect locale correctly.
   const freshResults: AgentRecord[] = await mapWithConcurrency(missingIds, AGENT_CALL_CONCURRENCY, (id) =>
-    callAgent(opts.baseUrl, id, { caseId: opts.caseId, phase: 1, caseBrief: opts.caseBrief }).then(
+    callAgent(opts.baseUrl, id, { caseId: opts.caseId, phase: 1, caseBrief: opts.caseBrief, locale: opts.locale }).then(
       async (r) => {
         await supabase.from("phase1_cache").upsert({
           case_id: opts.caseId,
@@ -300,7 +318,7 @@ export async function runPublicPhase1(opts: PublicRunOptions): Promise<AgentReco
           verdict: r.verdict,
           reasoning: r.reasoning,
         });
-        await logRun(opts.caseId, 1, r, true);
+        await logRun(opts.caseId, 1, r, true, opts.locale);
         return r;
       }
     )
@@ -331,6 +349,7 @@ interface PublicPhase2Options {
   activeDoctrines: DoctrineId[];
   phase1Results: AgentRecord[];
   baseUrl: string;
+  locale?: Locale;
 }
 
 export async function runPublicPhase2(opts: PublicPhase2Options): Promise<AgentRecord[]> {
@@ -346,8 +365,9 @@ export async function runPublicPhase2(opts: PublicPhase2Options): Promise<AgentR
       phase: 2,
       caseBrief: opts.caseBrief,
       priorPositions,
+      locale: opts.locale,
     }).then(async (r) => {
-      await logRun(opts.caseId, 2, r, true);
+      await logRun(opts.caseId, 2, r, true, opts.locale);
       return r;
     });
   });

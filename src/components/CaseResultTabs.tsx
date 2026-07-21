@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AgentCard, type AgentCardRun } from "@/src/components/AgentCard";
 import { DisagreementMap, type DisagreementJointRuling } from "@/src/components/DisagreementMap";
 import { LABELS } from "@/src/lib/palette";
+import { useLocale } from "@/src/i18n/LocaleContext";
 
 interface JointRuling extends DisagreementJointRuling {
   synthesisNotes: string;
@@ -17,19 +18,30 @@ export function CaseResultTabs({
   phase1,
   phase2,
   phase3,
-  phase2Hint,
+  phase2HintVariant,
 }: {
   phase1: AgentCardRun[];
   phase2?: AgentCardRun[];
   phase3?: JointRuling;
-  phase2Hint?: string;
+  /** "live" for a just-run rerun (root page), "recorded" for a historical view (permalink).
+   *  Text for each comes from the dictionary rather than being passed in as a raw string,
+   *  so it translates along with everything else. */
+  phase2HintVariant?: "live" | "recorded";
 }) {
+  const { t: dict } = useLocale();
   const tabs: { key: TabKey; label: string }[] = [
-    { key: "phase1", label: "Independent reasoning" },
-    ...(phase2?.length ? [{ key: "phase2" as const, label: "Cross-examination" }] : []),
-    ...(phase3 ? [{ key: "phase3" as const, label: "Joint verdict" }] : []),
+    { key: "phase1", label: dict.resultTabs.tabIndependent },
+    ...(phase2?.length ? [{ key: "phase2" as const, label: dict.resultTabs.tabCrossExamination }] : []),
+    ...(phase3 ? [{ key: "phase3" as const, label: dict.resultTabs.tabJointVerdict }] : []),
   ];
   const [active, setActive] = useState<TabKey>("phase1");
+
+  const phase2Hint =
+    phase2HintVariant === "live"
+      ? dict.page.phase2HintRerun
+      : phase2HintVariant === "recorded"
+        ? dict.permalink.phase2Hint
+        : undefined;
 
   return (
     <div>
@@ -44,11 +56,7 @@ export function CaseResultTabs({
           </button>
         ))}
       </div>
-      <p className="tab-hint">
-        How to read this: Phase 1 is fully independent — each agent reasons alone, with no
-        visibility into the others. Phase 2 and Phase 3 are live for whichever agents were
-        selected for this run.
-      </p>
+      <p className="tab-hint">{dict.resultTabs.howToRead}</p>
 
       {active === "phase1" && (
         <div className="tab-panel" key="phase1-panel">
@@ -70,22 +78,22 @@ export function CaseResultTabs({
       {active === "phase3" && phase3 && (
         <div className="tab-panel" key="phase3-panel">
           <div className="verdict-box">
-            <p className="section-eyebrow">Majority position</p>
+            <p className="section-eyebrow">{dict.resultTabs.majorityPosition}</p>
             <p className="verdict-text">{phase3.majorityPosition}</p>
             {phase3.majoritySupport?.length > 0 && (
               <p className="verdict-support">
-                Supported by: {phase3.majoritySupport.map((id) => LABELS[id] ?? id).join(", ")}
+                {dict.resultTabs.supportedBy} {phase3.majoritySupport.map((id) => LABELS[id] ?? id).join(", ")}
               </p>
             )}
           </div>
 
           <p className="section-eyebrow" style={{ marginTop: "1.5rem" }}>
-            Disagreement map
+            {dict.resultTabs.disagreementMap}
           </p>
           <DisagreementMap agentRuns={phase2 ?? phase1} jointRuling={phase3} labels={LABELS} />
 
           <p className="section-eyebrow" style={{ marginTop: "1.5rem" }}>
-            Full synthesis / dissents
+            {dict.resultTabs.fullSynthesis}
           </p>
           <p className="case-brief" style={{ whiteSpace: "pre-wrap" }}>
             {phase3.synthesisNotes}

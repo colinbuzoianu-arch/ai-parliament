@@ -4,6 +4,8 @@
 // directly; it only ever sees other agents' verdicts and reasoning.
 
 import { callOpenAITool } from "@/src/lib/openaiClient";
+import { localeInstruction } from "@/src/lib/localeInstruction";
+import type { Locale } from "@/src/i18n/locale";
 
 export interface AgentRecord {
   doctrineId: string;
@@ -122,7 +124,8 @@ const SUBMIT_RULING_TOOL = {
 
 export async function aggregate(
   caseId: string,
-  finalPositions: AgentRecord[]
+  finalPositions: AgentRecord[],
+  locale?: Locale
 ): Promise<JointRuling> {
   const apiKey = process.env.OPENAI_API_KEY_AGGREGATOR || process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("Missing OPENAI_API_KEY_AGGREGATOR");
@@ -141,7 +144,7 @@ export async function aggregate(
     model: "gpt-4o-mini",
     maxCompletionTokens: 3000,
     messages: [
-      { role: "system", content: AGGREGATOR_SYSTEM_PROMPT },
+      { role: "system", content: AGGREGATOR_SYSTEM_PROMPT + localeInstruction(locale) },
       { role: "user", content: userContent },
     ],
     tool: SUBMIT_RULING_TOOL,

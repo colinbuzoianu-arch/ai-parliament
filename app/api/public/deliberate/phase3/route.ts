@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/src/lib/supabaseClient";
 import { runPhase3 } from "@/src/orchestrator";
 import type { AgentRecord } from "@/src/aggregator";
+import { isLocale, type Locale } from "@/src/i18n/locale";
 
 export async function POST(req: NextRequest) {
-  const { caseId, phase2Final } = (await req.json()) as { caseId: string; phase2Final: AgentRecord[] };
+  const { caseId, phase2Final, locale } = (await req.json()) as {
+    caseId: string;
+    phase2Final: AgentRecord[];
+    locale?: Locale;
+  };
   if (!caseId) return NextResponse.json({ error: "caseId is required" }, { status: 400 });
   if (!phase2Final?.length) return NextResponse.json({ error: "phase2Final results are required" }, { status: 400 });
 
@@ -20,7 +25,12 @@ export async function POST(req: NextRequest) {
   if (error || !caseRow) return NextResponse.json({ error: "Public case not found" }, { status: 404 });
 
   try {
-    const phase3 = await runPhase3({ caseId, phase2Results: phase2Final, isPublic: true });
+    const phase3 = await runPhase3({
+      caseId,
+      phase2Results: phase2Final,
+      isPublic: true,
+      locale: isLocale(locale) ? locale : undefined,
+    });
     return NextResponse.json({ phase3 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message ?? "Phase 3 failed" }, { status: 500 });

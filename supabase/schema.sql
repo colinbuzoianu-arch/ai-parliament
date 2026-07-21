@@ -82,6 +82,7 @@ create table if not exists agent_runs (
   reasoning_tensions jsonb,
   model text not null default 'gpt-4o',
   is_public boolean not null default false,
+  locale text not null default 'en', -- 'en' | 'de' | 'fr' — UI locale the visitor had selected
   created_at timestamptz not null default now()
 );
 
@@ -110,6 +111,9 @@ alter table phase1_cache add column if not exists headline text;
 
 -- Migration for pre-existing phase1_cache tables created before the stance field existed.
 alter table phase1_cache add column if not exists stance text;
+
+-- Migration for pre-existing agent_runs tables created before trilingual (EN/DE/FR) support.
+alter table agent_runs add column if not exists locale text not null default 'en';
 
 -- Enforce append-only at the database level, not just in application code.
 -- Revoke UPDATE/DELETE from the roles the app uses; only INSERT and SELECT remain.

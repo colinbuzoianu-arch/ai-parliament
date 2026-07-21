@@ -1,11 +1,11 @@
 // Read-only permalink for a single case's full deliberation record. No agent picker, no run
 // button — this renders whatever is already in agent_runs for the given case_id, straight
 // from Supabase, server-side. Works for any case (seeded or user-submitted) that has been run
-// at least once.
+// at least once. Stays a server component for data fetching only; all locale-dependent text
+// rendering lives in PermalinkView (client component) so the LocaleSwitcher updates instantly.
 import { notFound } from "next/navigation";
 import { supabase } from "@/src/lib/supabaseClient";
-import { CaseResultTabs } from "@/src/components/CaseResultTabs";
-import { WlsFooter } from "@/src/components/WlsFooter";
+import { PermalinkView } from "@/src/components/PermalinkView";
 
 interface AgentRunRow {
   phase: number;
@@ -65,15 +65,7 @@ export default async function CasePermalinkPage({ params }: { params: Promise<{ 
   const phase3Row = latest.get("3:_aggregator");
 
   if (phase1Rows.length === 0) {
-    return (
-      <div>
-        <h1 className="case-title">{caseRow.title}</h1>
-        <p style={{ fontSize: 14, color: "var(--ink-muted)" }}>
-          This case hasn't been deliberated yet — no results to show.
-        </p>
-        <WlsFooter />
-      </div>
-    );
+    return <PermalinkView caseTitle={caseRow.title} caseBrief={caseRow.brief} phase1={null} />;
   }
 
   const phase1 = phase1Rows.map(toAgentRun);
@@ -89,25 +81,12 @@ export default async function CasePermalinkPage({ params }: { params: Promise<{ 
     : undefined;
 
   return (
-    <div>
-      <p style={{ marginBottom: 8 }}>
-        <a href="/" className="back-link">
-          ← back to AI Parliament
-        </a>
-      </p>
-      <h1 className="case-title">{caseRow.title}</h1>
-      <p className="case-brief">{caseRow.brief}</p>
-
-      <div style={{ marginTop: "1.75rem" }}>
-        <CaseResultTabs
-          phase1={phase1}
-          phase2={phase2.length > 0 ? phase2 : undefined}
-          phase3={jointRuling}
-          phase2Hint="Final recorded position after cross-examination."
-        />
-      </div>
-
-      <WlsFooter />
-    </div>
+    <PermalinkView
+      caseTitle={caseRow.title}
+      caseBrief={caseRow.brief}
+      phase1={phase1}
+      phase2={phase2.length > 0 ? phase2 : undefined}
+      phase3={jointRuling}
+    />
   );
 }

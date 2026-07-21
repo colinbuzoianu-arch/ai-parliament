@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { agentColor, LABELS } from "@/src/lib/palette";
 import { classifyVerdictStance } from "@/src/lib/verdictStance";
+import { useLocale } from "@/src/i18n/LocaleContext";
+import type { Dictionary } from "@/src/i18n/dictionaries/en";
 
 export interface AgentCardRun {
   doctrineId: string;
@@ -19,6 +21,7 @@ export interface AgentCardRun {
 // state so the same component works whether the parent is a client page (sandbox) or a
 // server component (the permalink page) rendering it as a child.
 export function AgentCard({ run, showChange }: { run: AgentCardRun; showChange?: boolean }) {
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const color = agentColor(run.doctrineId);
   const label = LABELS[run.doctrineId] ?? run.doctrineId;
@@ -40,14 +43,14 @@ export function AgentCard({ run, showChange }: { run: AgentCardRun; showChange?:
           <span className="agent-name" style={{ color: color.text }}>
             {label}
           </span>
-          {stance && <StanceSymbol stance={stance} />}
+          {stance && <StanceSymbol stance={stance} t={t} />}
           {showChange && (
             <span
               className={`status-pill ${
                 run.verdictChangedFromPriorPhase ? "status-pill--revised" : "status-pill--held"
               }`}
             >
-              {run.verdictChangedFromPriorPhase ? "revised" : "held"}
+              {run.verdictChangedFromPriorPhase ? t.agentCard.revised : t.agentCard.held}
             </span>
           )}
         </span>
@@ -65,16 +68,16 @@ export function AgentCard({ run, showChange }: { run: AgentCardRun; showChange?:
       <div className="agent-card-body" style={{ gridTemplateRows: open ? "1fr" : "0fr" }}>
         <div style={{ overflow: "hidden" }}>
           <div className="agent-card-content">
-            {run.framing && <Stage label="Framing" text={run.framing} />}
-            {run.doctrinalAnalysis && <Stage label="Doctrinal analysis" text={run.doctrinalAnalysis} />}
+            {run.framing && <Stage label={t.agentCard.framing} text={run.framing} />}
+            {run.doctrinalAnalysis && <Stage label={t.agentCard.doctrinalAnalysis} text={run.doctrinalAnalysis} />}
             {run.forecast && (
               <Stage
-                label="Forecast"
-                text={`Objective: ${run.forecast.objective}\nProjected outcome: ${run.forecast.projectedOutcome}\nConfidence: ${run.forecast.confidence}`}
+                label={t.agentCard.forecast}
+                text={`${t.agentCard.objective}: ${run.forecast.objective}\n${t.agentCard.projectedOutcome}: ${run.forecast.projectedOutcome}\n${t.agentCard.confidence}: ${run.forecast.confidence}`}
               />
             )}
-            <Stage label="Verdict" text={run.verdict} />
-            {run.changeJustification && <Stage label="Change justification" text={run.changeJustification} />}
+            <Stage label={t.agentCard.verdict} text={run.verdict} />
+            {run.changeJustification && <Stage label={t.agentCard.changeJustification} text={run.changeJustification} />}
           </div>
         </div>
       </div>
@@ -85,9 +88,9 @@ export function AgentCard({ run, showChange }: { run: AgentCardRun; showChange?:
 // Small colored symbol next to the agent's name showing the verdict's stance — separate
 // from the agent's identity color (border/name), which stays fixed per agent everywhere
 // else in the UI. Only rendered when classifyVerdictStance is confident (see that file).
-function StanceSymbol({ stance }: { stance: "approve" | "reject" }) {
+function StanceSymbol({ stance, t }: { stance: "approve" | "reject"; t: Dictionary }) {
   const fill = stance === "approve" ? "#2f7a54" : "#a83e3e";
-  const label = stance === "approve" ? "Approve" : "Reject";
+  const label = stance === "approve" ? t.agentCard.approve : t.agentCard.reject;
   return (
     <span title={label} style={{ display: "inline-flex", flexShrink: 0 }}>
       <svg width="14" height="14" viewBox="0 0 14 14" role="img" aria-label={label}>

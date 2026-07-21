@@ -254,6 +254,8 @@ RULES:
 INDEX_TS_TEMPLATE = '''// AUTO-GENERATED scaffold for the "{name}" agent.
 import {{ systemPrompt, doctrineMeta }} from "./config";
 import {{ callOpenAITool }} from "@/src/lib/openaiClient";
+import {{ localeInstruction }} from "@/src/lib/localeInstruction";
+import type {{ Locale }} from "@/src/i18n/locale";
 
 export interface Forecast {{
   objective: string;
@@ -266,6 +268,9 @@ export interface DeliberationInput {{
   phase: 1 | 2 | 3;
   caseBrief: string;
   priorPositions?: {{ doctrineId: string; verdict: string; reasoning: string }}[];
+  /** UI locale the visitor has selected — drives what language prose fields are written in
+   *  (see localeInstruction). Defaults to English if omitted (e.g. the admin page). */
+  locale?: Locale;
 }}
 
 export interface DeliberationOutput {{
@@ -365,7 +370,7 @@ export async function deliberate(input: DeliberationInput): Promise<Deliberation
     model: "gpt-4o-mini",
     maxCompletionTokens: 2500,
     messages: [
-      {{ role: "system", content: systemPrompt }},
+      {{ role: "system", content: systemPrompt + localeInstruction(input.locale) }},
       {{ role: "user", content: userContent }},
     ],
     tool: SUBMIT_DELIBERATION_TOOL,

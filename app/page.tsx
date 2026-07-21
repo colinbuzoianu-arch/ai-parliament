@@ -5,6 +5,8 @@ import { AgentChip } from "@/src/components/AgentChip";
 import { CaseResultTabs } from "@/src/components/CaseResultTabs";
 import { SandboxExplainer } from "@/src/components/SandboxExplainer";
 import { WlsFooter } from "@/src/components/WlsFooter";
+import { LocaleSwitcher } from "@/src/components/LocaleSwitcher";
+import { useLocale } from "@/src/i18n/LocaleContext";
 import { ALL_AGENTS, LABELS } from "@/src/lib/palette";
 
 const DEFAULT_ROSTER = [
@@ -20,15 +22,10 @@ interface PublicCase {
 
 const MAX_SUBMISSION_AGENTS = 6;
 
-const PHASE_STATUS: Record<1 | 2 | 3, string> = {
-  1: "The agents are independently reviewing the case…",
-  2: "Cross-examining each other's positions…",
-  3: "Reaching a joint verdict…",
-};
-
 // Hardcoded, not fetched — no database-backed case list. Text reused from
 // scripts/seed-cases.mjs's SEED_CASES. Clicking one only pre-fills the form fields below;
-// it never creates or runs a case on its own.
+// it never creates or runs a case on its own. English-only regardless of UI locale — these
+// are sample input data for the form, not interface copy.
 const EXAMPLE_CASES: { title: string; brief: string }[] = [
   {
     title: "Municipal facial-recognition camera network",
@@ -62,6 +59,7 @@ outside parties.`,
 ];
 
 export default function SandboxPage() {
+  const { locale, t } = useLocale();
   const [selectedCase, setSelectedCase] = useState<PublicCase | null>(null);
   const [roster, setRoster] = useState<Set<string>>(new Set(DEFAULT_ROSTER));
   const [loading, setLoading] = useState(false);
@@ -100,28 +98,28 @@ export default function SandboxPage() {
       const phase1Res = await fetch("/api/public/deliberate/phase1", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ caseId, activeDoctrines }),
+        body: JSON.stringify({ caseId, activeDoctrines, locale }),
       });
       const phase1Data = await phase1Res.json();
-      if (!phase1Res.ok) throw new Error(phase1Data.error ?? "Phase 1 failed");
+      if (!phase1Res.ok) throw new Error(phase1Data.error ?? t.page.errors.phase1Failed);
 
       setRunningPhase(2);
       const phase2Res = await fetch("/api/public/deliberate/phase2", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ caseId, activeDoctrines, phase1: phase1Data.phase1 }),
+        body: JSON.stringify({ caseId, activeDoctrines, phase1: phase1Data.phase1, locale }),
       });
       const phase2Data = await phase2Res.json();
-      if (!phase2Res.ok) throw new Error(phase2Data.error ?? "Phase 2 failed");
+      if (!phase2Res.ok) throw new Error(phase2Data.error ?? t.page.errors.phase2Failed);
 
       setRunningPhase(3);
       const phase3Res = await fetch("/api/public/deliberate/phase3", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ caseId, phase2Final: phase2Data.phase2Final }),
+        body: JSON.stringify({ caseId, phase2Final: phase2Data.phase2Final, locale }),
       });
       const phase3Data = await phase3Res.json();
-      if (!phase3Res.ok) throw new Error(phase3Data.error ?? "Phase 3 failed");
+      if (!phase3Res.ok) throw new Error(phase3Data.error ?? t.page.errors.phase3Failed);
 
       setResult({
         phase1: phase1Data.phase1,
@@ -129,7 +127,7 @@ export default function SandboxPage() {
         phase3: phase3Data.phase3,
       });
     } catch (err: any) {
-      setError(err.message ?? "Something went wrong");
+      setError(err.message ?? t.page.errors.somethingWrong);
     } finally {
       setLoading(false);
       setRunningPhase(null);
@@ -147,15 +145,16 @@ export default function SandboxPage() {
           title: newTitle,
           brief: newBrief,
           activeDoctrines: Array.from(newRoster),
+          locale,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Submission failed");
+      if (!res.ok) throw new Error(data.error ?? t.page.errors.submissionFailed);
       setSelectedCase(data.case);
       setRoster(new Set(data.case.active_doctrines));
       await runDeliberation(data.case.id, data.case.active_doctrines);
     } catch (err: any) {
-      setError(err.message ?? "Something went wrong");
+      setError(err.message ?? t.page.errors.somethingWrong);
       setLoading(false);
     }
   }
@@ -168,17 +167,17 @@ export default function SandboxPage() {
 
   return (
     <div>
+      <LocaleSwitcher />
       <SandboxExplainer />
 
       {!selectedCase && (
         <div>
           <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: "1rem" }}>
-            This runs a live deliberation right now. To keep the sandbox affordable, pick up to{" "}
-            {MAX_SUBMISSION_AGENTS} agents for a new case.
+            {t.page.liveNote.replace("{max}", String(MAX_SUBMISSION_AGENTS))}
           </p>
 
           <p className="section-eyebrow" style={{ marginTop: "1rem" }}>
-            Try an example
+            {t.page.tryAnExample}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: "1rem" }}>
             {EXAMPLE_CASES.map((ex) => (
@@ -188,25 +187,25 @@ export default function SandboxPage() {
             ))}
           </div>
 
-          <label className="field-label">Title</label>
+          <label className="field-label">{t.page.titleLabel}</label>
           <input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             className="text-input"
-            placeholder="e.g. Rezoning a floodplain for housing"
+            placeholder={t.page.titlePlaceholder}
             maxLength={140}
           />
-          <label className="field-label">Case brief</label>
+          <label className="field-label">{t.page.briefLabel}</label>
           <textarea
             value={newBrief}
             onChange={(e) => setNewBrief(e.target.value)}
             rows={6}
             className="textarea-input"
-            placeholder="Describe the policy or project the agents should deliberate on..."
+            placeholder={t.page.briefPlaceholder}
             maxLength={4000}
           />
           <p className="field-label" style={{ margin: "1rem 0 6px" }}>
-            Agents ({newRoster.size}/{MAX_SUBMISSION_AGENTS})
+            {t.page.agentsLabel} ({newRoster.size}/{MAX_SUBMISSION_AGENTS})
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: "1rem" }}>
             {ALL_AGENTS.map((id) => (
@@ -225,9 +224,9 @@ export default function SandboxPage() {
             onClick={submitOwnCase}
             disabled={loading || !newTitle.trim() || !newBrief.trim() || newRoster.size === 0}
           >
-            {loading ? "Running deliberation..." : "Submit and run"}
+            {loading ? t.page.runningDeliberation : t.page.submitAndRun}
           </button>
-          {loading && runningPhase && <p className="status-text">{PHASE_STATUS[runningPhase]}</p>}
+          {loading && runningPhase && <p className="status-text">{t.page.phaseStatus[runningPhase]}</p>}
           {error && <p className="error-text">{error}</p>}
         </div>
       )}
@@ -235,13 +234,13 @@ export default function SandboxPage() {
       {selectedCase && (
         <div style={{ marginTop: "1.5rem" }}>
           <button className="btn-ghost" onClick={() => setSelectedCase(null)} style={{ marginBottom: 12 }}>
-            ← submit another case
+            {t.page.submitAnotherCase}
           </button>
           <h2 className="case-title">{selectedCase.title}</h2>
           <p className="case-brief">{selectedCase.brief}</p>
 
           <p className="section-eyebrow" style={{ marginTop: "1.25rem" }}>
-            Choose the panel
+            {t.page.choosePanel}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: "1rem" }}>
             {ALL_AGENTS.map((id) => (
@@ -254,13 +253,10 @@ export default function SandboxPage() {
             onClick={() => runDeliberation(selectedCase.id, Array.from(roster))}
             disabled={loading || roster.size === 0}
           >
-            {loading ? "Running live deliberation..." : "Run deliberation"}
+            {loading ? t.page.runningLiveDeliberation : t.page.runDeliberation}
           </button>
-          {loading && runningPhase && <p className="status-text">{PHASE_STATUS[runningPhase]}</p>}
-          <p style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>
-            Independent reasoning (Phase 1) is precomputed for every agent on this case.
-            Cross-examination and the joint ruling run live, for your chosen panel, right now.
-          </p>
+          {loading && runningPhase && <p className="status-text">{t.page.phaseStatus[runningPhase]}</p>}
+          <p style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6 }}>{t.page.phase1Note}</p>
 
           {error && <p className="error-text">{error}</p>}
 
@@ -270,7 +266,7 @@ export default function SandboxPage() {
                 phase1={result.phase1}
                 phase2={result.phase2Final}
                 phase3={result.phase3}
-                phase2Hint="Final position after live cross-examination."
+                phase2HintVariant="live"
               />
             </div>
           )}

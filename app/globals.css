@@ -11,6 +11,40 @@
   --surface-muted: #f7f7f5;
 }
 
+/* --- Locale switcher --- */
+
+.locale-switcher {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+.locale-switcher-btn {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.locale-switcher-btn:hover {
+  color: var(--ink-soft);
+}
+.locale-switcher-btn--active {
+  color: var(--ink);
+  background: var(--surface-muted);
+}
+.locale-switcher-sep {
+  color: var(--border);
+  font-size: 12px;
+  margin: 0 2px;
+}
+
 /* --- Typography hierarchy --- */
 
 .page-title {

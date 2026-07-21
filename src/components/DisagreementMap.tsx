@@ -1,6 +1,7 @@
 "use client";
 
 import { PALETTE } from "@/src/lib/palette";
+import { useLocale } from "@/src/i18n/LocaleContext";
 
 export interface DisagreementAgentRun {
   doctrineId: string;
@@ -40,6 +41,7 @@ export function DisagreementMap({
   jointRuling: DisagreementJointRuling;
   labels: Record<string, string>;
 }) {
+  const { t: dict } = useLocale();
   // Group agents by which conclusion they reached: the majority position is one group;
   // each distinct dissenting position (by exact text match) forms its own group.
   const groupOf = new Map<string, number>();
@@ -79,13 +81,13 @@ export function DisagreementMap({
           <thead>
             <tr style={{ textAlign: "left", borderBottom: "1px solid #e4e4e1" }}>
               <th className="stage-label" style={{ padding: "8px 10px" }}>
-                Doctrine
+                {dict.disagreementMap.doctrine}
               </th>
               <th className="stage-label" style={{ padding: "8px 10px" }}>
-                Final verdict
+                {dict.disagreementMap.finalVerdict}
               </th>
               <th className="stage-label" style={{ padding: "8px 10px" }}>
-                Reasoning route
+                {dict.disagreementMap.reasoningRoute}
               </th>
             </tr>
           </thead>
@@ -119,7 +121,7 @@ export function DisagreementMap({
       </div>
       {(jointRuling.reasoningTensions?.length ?? 0) > 0 && (
         <div style={{ marginTop: 10, fontSize: 12, color: "#a3701f" }}>
-          <p style={{ margin: "0 0 4px", fontWeight: 600 }}>⚠ Same conclusion, different reasoning:</p>
+          <p style={{ margin: "0 0 4px", fontWeight: 600 }}>{dict.disagreementMap.sameConclusion}</p>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {jointRuling.reasoningTensions!.map((t, i) => (
               <li key={i}>

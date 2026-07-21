@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/src/lib/supabaseClient";
 import { runPublicPhase2, type DoctrineId } from "@/src/orchestrator";
 import type { AgentRecord } from "@/src/aggregator";
+import { isLocale, type Locale } from "@/src/i18n/locale";
 
 export async function POST(req: NextRequest) {
-  const { caseId, activeDoctrines, phase1 } = (await req.json()) as {
+  const { caseId, activeDoctrines, phase1, locale } = (await req.json()) as {
     caseId: string;
     activeDoctrines: DoctrineId[];
     phase1: AgentRecord[];
+    locale?: Locale;
   };
 
   if (!caseId || !activeDoctrines?.length) {
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest) {
       activeDoctrines,
       phase1Results: phase1,
       baseUrl,
+      locale: isLocale(locale) ? locale : undefined,
     });
     return NextResponse.json({ phase2Final });
   } catch (err: any) {
