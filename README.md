@@ -98,13 +98,14 @@ cp .env.example .env.local   # fill in Supabase + OpenAI keys, and APP_BASE_URL=
 npm run dev
 ```
 
-Open `http://localhost:3000` for the UI: enter a case title + brief, pick which of the 11
-agents participate (9 are pre-selected as the default roster), choose how many Phase 2
-cross-examination rounds to run, then run the deliberation. Each agent's card expands to show
-its full four-stage reasoning (framing, doctrinal analysis, forecast, verdict) for Phase 1 and
-Phase 2, and Phase 3 shows the joint ruling with attributed dissents.
+Open `http://localhost:3000` for the public-facing UI (see "Public sandbox" below), or
+`http://localhost:3000/admin` for the internal admin page: enter a case title + brief, pick
+which of the 11 agents participate (9 are pre-selected as the default roster), choose how many
+Phase 2 cross-examination rounds to run, then run the deliberation. Each agent's card expands
+to show its full four-stage reasoning (framing, doctrinal analysis, forecast, verdict) for
+Phase 1 and Phase 2, and Phase 3 shows the joint ruling with attributed dissents.
 
-Or drive it directly via the API:
+Or drive the admin flow directly via the API:
 ```bash
 curl -X POST http://localhost:3000/api/cases \
   -H "content-type: application/json" \
@@ -142,16 +143,18 @@ instance (or a preview branch) with:
 This keeps the parliament's real audit trail clean while still exercising the exact same
 agent/orchestrator code — you're testing the real thing, just against disposable data.
 
-## Public sandbox (`/sandbox`)
+## Public sandbox (`/`)
 
-A second, public-facing page for showcasing the project — e.g. embedded under WLS — separate
-from the internal admin page at `/`.
+The root page (`/`, plus its permalink at `/case/[id]`) is the public-facing side of the
+project — this is what's meant to be embedded/linked under WLS (e.g.
+`parliament.worldlegalservice.com`). The internal admin page lives separately at `/admin` and
+is not linked from anywhere public.
 
 **Design:** Phase 1 (independent reasoning) does not depend on which agents are in the roster,
 since agents never see each other in Phase 1. So for public/seeded cases, Phase 1 is computed
 **once**, for all 11 agents, via `scripts/seed-cases.mjs`, and cached in `phase1_cache`. When a
-visitor picks a subset of agents on `/sandbox` and hits run, only Phase 2 (one live round) and
-Phase 3 (live aggregation) actually call the OpenAI API — a small, bounded number of calls
+visitor picks a subset of agents on the root page and hits run, only Phase 2 (one live round)
+and Phase 3 (live aggregation) actually call the OpenAI API — a small, bounded number of calls
 per visitor session, not a full 11-agent Phase 1 every time.
 
 **Rate limiting:** `public_usage` now tracks two kinds separately — `rerun` (re-running an
@@ -160,12 +163,12 @@ brand-new user-submitted case, capped at 15/day, since it can trigger several fr
 calls at once). Adjust `DAILY_CAPS` in `src/orchestrator/index.ts`.
 
 **User submissions:** visitors can submit their own case brief and pick up to 6 agents (capped
-to bound the cost of any single new submission) via the "Submit your own" tab on `/sandbox`.
-`runPublicDeliberation` is self-healing — any agent not yet cached for a given case runs Phase 1
-live and is cached afterward, so this works for brand-new cases with no pre-seeding step, and
-the same case/agent combination is free for every subsequent visitor. Submitted cases join the
-public gallery (tagged `user_submitted` vs `seeded`), so the sandbox becomes a growing library of
-real deliberations rather than three static demos.
+to bound the cost of any single new submission). `runPublicPhase1` is self-healing — any agent
+not yet cached for a given case runs Phase 1 live and is cached afterward, so this works for
+brand-new cases with no pre-seeding step, and the same case/agent combination is free for every
+subsequent visitor. There is currently no public case gallery — a submission runs immediately
+for its submitter, but isn't otherwise browsable; the permalink at `/case/[id]` still works for
+anyone with the direct link.
 
 **Seeding:** three generic, illustrative policy cases ship in `scripts/seed-cases.mjs` (a
 facial-recognition camera network, a UBI pilot funded by a windfall tax, and mandatory

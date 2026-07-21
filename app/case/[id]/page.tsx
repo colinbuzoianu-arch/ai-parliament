@@ -89,8 +89,8 @@ export default async function CasePermalinkPage({ params }: { params: Promise<{ 
   return (
     <div>
       <p style={{ marginBottom: 8 }}>
-        <a href="/sandbox" className="back-link">
-          ← back to sandbox
+        <a href="/" className="back-link">
+          ← back to AI Parliament
         </a>
       </p>
       <h1 className="case-title">{caseRow.title}</h1>

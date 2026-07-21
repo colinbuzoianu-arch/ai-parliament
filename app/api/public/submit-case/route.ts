@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
   try {
     // Self-healing cache in runPublicPhase1 handles Phase 1 live since nothing is cached
     // yet for this brand-new case. This submission flow runs all three phases in one
-    // server-side pass (there's no interactive per-phase UI here, unlike /sandbox's
+    // server-side pass (there's no interactive per-phase UI here, unlike the root page's
     // rerun flow, which calls each phase as a separate request to show live progress).
     const phase1 = await runPublicPhase1({
       caseId: caseRow.id,

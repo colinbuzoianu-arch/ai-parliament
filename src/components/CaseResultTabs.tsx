@@ -11,7 +11,7 @@ interface JointRuling extends DisagreementJointRuling {
 
 type TabKey = "phase1" | "phase2" | "phase3";
 
-// Shared results view for a deliberation, used by both /sandbox (live runs) and the
+// Shared results view for a deliberation, used by both the root page (live runs) and the
 // permalink page (read-only historical runs) so the two never drift into separate styles.
 export function CaseResultTabs({
   phase1,
