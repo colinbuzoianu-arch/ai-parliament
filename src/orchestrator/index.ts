@@ -288,6 +288,7 @@ export async function runPublicPhase1(opts: PublicRunOptions): Promise<AgentReco
           case_id: opts.caseId,
           doctrine_id: r.doctrineId,
           headline: (r as any).headline,
+          stance: (r as any).stance,
           framing: (r as any).framing,
           doctrinal_analysis: (r as any).doctrinalAnalysis,
           forecast_objective: (r as any).forecast?.objective,
@@ -305,6 +306,7 @@ export async function runPublicPhase1(opts: PublicRunOptions): Promise<AgentReco
   const cachedResults: AgentRecord[] = (cachedRows ?? []).map((row: any) => ({
     doctrineId: row.doctrine_id,
     headline: row.headline ?? undefined,
+    stance: row.stance ?? undefined,
     framing: row.framing,
     doctrinalAnalysis: row.doctrinal_analysis,
     forecast: {

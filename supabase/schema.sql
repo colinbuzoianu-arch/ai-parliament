@@ -37,6 +37,7 @@ create table if not exists phase1_cache (
   case_id uuid not null references cases(id),
   doctrine_id text not null,
   headline text,
+  stance text,
   framing text,
   doctrinal_analysis text,
   forecast_objective text,
@@ -106,6 +107,9 @@ alter table agent_runs alter column model set default 'gpt-4o-mini';
 
 -- Migration for pre-existing phase1_cache tables created before the headline field existed.
 alter table phase1_cache add column if not exists headline text;
+
+-- Migration for pre-existing phase1_cache tables created before the stance field existed.
+alter table phase1_cache add column if not exists stance text;
 
 -- Enforce append-only at the database level, not just in application code.
 -- Revoke UPDATE/DELETE from the roles the app uses; only INSERT and SELECT remain.

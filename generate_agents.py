@@ -274,6 +274,10 @@ export interface DeliberationOutput {{
    *  this position in Phase 2 — cheaper than the full reasoning and, since the model writes
    *  it knowing that's its job, more targeted than a truncated excerpt would be. */
   headline: string;
+  /** The bottom-line recommendation, stated directly by the model rather than inferred by
+   *  regex from verdict text — free-text verdicts are phrased too variably (and can include
+   *  negation, e.g. "should not be approved") for keyword-matching to be reliable. */
+  stance: "approve" | "reject" | "mixed";
   framing: string;
   doctrinalAnalysis: string;
   forecast: Forecast;
@@ -302,6 +306,15 @@ const SUBMIT_DELIBERATION_TOOL = {{
             "One self-contained sentence stating your verdict and its core reason. Other agents " +
             "will see ONLY this (not your full framing/analysis) when cross-examining in Phase 2, " +
             "so it must stand alone as a fair summary of your position.",
+        }},
+        stance: {{
+          type: "string",
+          enum: ["approve", "reject", "mixed"],
+          description:
+            "Your bottom-line recommendation, independent of any conditions attached to it: approve " +
+            "if you favor proceeding, even conditionally (an approval with an audit clause attached " +
+            "is still approve, not mixed); reject if you favor not proceeding; mixed ONLY if you are " +
+            "genuinely undecided or exactly split, not merely conditional.",
         }},
         framing: {{
           type: "string",
@@ -336,7 +349,7 @@ const SUBMIT_DELIBERATION_TOOL = {{
             "versus social pressure to converge. Label a pressure-driven change as such.",
         }},
       }},
-      required: ["headline", "framing", "doctrinalAnalysis", "forecast", "verdict", "changed"],
+      required: ["headline", "stance", "framing", "doctrinalAnalysis", "forecast", "verdict", "changed"],
     }},
   }},
 }} as const;
@@ -380,9 +393,12 @@ function parseModelOutput(out: any): DeliberationOutput {{
     confidence: out.forecast?.confidence ?? "medium",
   }};
 
+  const stance = out.stance === "approve" || out.stance === "reject" || out.stance === "mixed" ? out.stance : "mixed";
+
   return {{
     doctrineId: doctrineMeta.id,
     headline: out.headline ?? "",
+    stance,
     framing: out.framing ?? "",
     doctrinalAnalysis: out.doctrinalAnalysis ?? "",
     forecast,

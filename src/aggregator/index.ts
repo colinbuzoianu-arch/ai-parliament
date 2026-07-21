@@ -10,6 +10,9 @@ export interface AgentRecord {
   /** One-sentence verdict + core reason — see generate_agents.py. Optional since cached
    *  phase1_cache rows written before this field existed won't have it. */
   headline?: string;
+  /** Bottom-line recommendation stated directly by the model — see generate_agents.py.
+   *  Optional since cached phase1_cache rows written before this field existed won't have it. */
+  stance?: "approve" | "reject" | "mixed";
   framing?: string;
   doctrinalAnalysis?: string;
   forecast?: { objective: string; projectedOutcome: string; confidence: string };

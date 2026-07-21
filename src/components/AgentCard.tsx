@@ -6,6 +6,7 @@ import { classifyVerdictStance } from "@/src/lib/verdictStance";
 
 export interface AgentCardRun {
   doctrineId: string;
+  stance?: "approve" | "reject" | "mixed";
   framing?: string;
   doctrinalAnalysis?: string;
   forecast?: { objective: string; projectedOutcome: string; confidence: string };
@@ -21,7 +22,16 @@ export function AgentCard({ run, showChange }: { run: AgentCardRun; showChange?:
   const [open, setOpen] = useState(false);
   const color = agentColor(run.doctrineId);
   const label = LABELS[run.doctrineId] ?? run.doctrineId;
-  const stance = classifyVerdictStance(run.verdict);
+  // Prefer the model's own structured stance (reliable — see verdictStance.ts for why regex
+  // isn't); fall back to the regex classifier only for older records that predate that field.
+  let stance: "approve" | "reject" | null;
+  if (run.stance === "approve" || run.stance === "reject") {
+    stance = run.stance;
+  } else if (run.stance === "mixed") {
+    stance = null;
+  } else {
+    stance = classifyVerdictStance(run.verdict);
+  }
 
   return (
     <div className="agent-card" style={{ borderLeftColor: color.border }}>
